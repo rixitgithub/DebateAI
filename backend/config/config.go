@@ -17,6 +17,10 @@ type Config struct {
         UserPoolId      string `yaml:"userPoolId"`
         Region          string `yaml:"region"`
     } `yaml:"cognito"`
+
+    Openai struct {
+        GptApiKey       string `yaml:"gptApiKey"`
+    } `yaml:"openai`
 }
 
 func LoadConfig(path string) (*Config, error) {

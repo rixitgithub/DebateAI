@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Authentication from './Pages/Authentication';
 import Home from './Pages/Home';
 import { ThemeProvider } from './context/theme-provider';
-
+import DebateApp from './Pages/Game';
+import LiveTranscriptionApp from './Pages/SpeachRecognition';
 // Dummy authentication check function (replace with real logic)
 const isAuthenticated = (): boolean => {
   // Example: Check if a token exists in localStorage
@@ -29,6 +30,9 @@ function App() {
         <Routes>
           <Route path="/auth" element={<Authentication />} />
           <Route path="/" element={<Home />} />
+          <Route path="/game/:userId" element={<DebateApp />} />
+          {/* <Route path="/" element={<LiveTranscriptionApp />} /> */}
+
         </Routes>
       </Router>
     </ThemeProvider>
