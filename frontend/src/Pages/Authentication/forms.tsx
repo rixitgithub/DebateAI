@@ -2,8 +2,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react';
 
-let baseURL = import.meta.env.VITE_BASE_URL
-
 
 interface LoginFormProps {
   startForgotPassword: () => void;
