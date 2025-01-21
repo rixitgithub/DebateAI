@@ -23,9 +23,10 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
   setCameraOn,
   setMicOn,
   isTurn,
-  turnDuration,
-  
+  turnDuration = 0,
 }) => {
+  console.log("turn duration: ", turnDuration);
+  console.log(isTurn);
   return (
     <div className="flex justify-between items-center border rounded w-full p-2 ">
       {/* Player Details Section */}
@@ -50,7 +51,7 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
         </div>
       )}
       {/* Timer */}
-      <Timer key={isTurn ? 'turn' : 'not-turn'} initialTime={isTurn ? (turnDuration ?? 0) : 0} />
+      <Timer key={isTurn ? 'turn' : 'not-turn'} initialTime={isTurn ? turnDuration : 0} />
     </div>
   );
 };

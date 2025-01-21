@@ -20,13 +20,14 @@ const UserCamera: React.FC<UserCameraProps> = ({
 
   useEffect(() => {
     const startCamera = async () => {
-      if (!websocket) return; // Wait until websocket is available
+      if (!websocket) return; // Wait until WebSocket is available
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: true,
         });
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -41,17 +42,18 @@ const UserCamera: React.FC<UserCameraProps> = ({
         audioTrackRef.current = audioTrack;
 
         // Initialize MediaRecorder
-        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current = new MediaRecorder(stream, {
+          mimeType: "video/webm; codecs=vp8",
+        });
 
         mediaRecorderRef.current.ondataavailable = (event) => {
           if (event.data.size > 0 && sendData && websocket) {
-            console.log("Sending data to backend");
-            websocket.send(event.data);
+            event.data.arrayBuffer().then((buffer) => websocket.send(buffer));
           }
         };
 
-        // Start recording
-        mediaRecorderRef.current.start(1000); // Emit data every 1 second
+        // Start recording in intervals of 400ms
+        mediaRecorderRef.current.start(100);
       } catch (err) {
         console.error("Error accessing camera or microphone:", err);
       }
