@@ -15,11 +15,11 @@ const Game: React.FC = () => {
   const websocketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // if (!userId || websocketRef.current) return;
-
     const wsURL = `${import.meta.env.VITE_BASE_URL}/ws?userId=${userId}`;
     const ws = new WebSocket(wsURL);
+    ws.binaryType = "arraybuffer";
     websocketRef.current = ws;
+    
 
     ws.onopen = () => {
       console.log("WebSocket connection established");
@@ -41,7 +41,7 @@ const Game: React.FC = () => {
           const { currentTurn, duration } = JSON.parse(message.content);
           setIsTurn(currentTurn === userId);
           setTurnDuration(duration);
-          console.log(duration)
+          console.log(currentTurn === userId)
           break;
         }
         default:

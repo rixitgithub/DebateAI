@@ -14,7 +14,10 @@ const formatTime = (time: number): string => {
 
 const Timer: React.FC<TimerProps> = ({ initialTime }) => {
   const [time, setTime] = useState<number>(initialTime);
-
+    // Synchronize state with the latest `initialTime` prop
+    useEffect(() => {
+      setTime(initialTime); // Update `time` whenever `initialTime` changes
+    }, [initialTime]);
   useEffect(() => {
     if (time <= 0) return;
 
