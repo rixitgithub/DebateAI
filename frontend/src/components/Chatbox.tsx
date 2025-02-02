@@ -1,14 +1,15 @@
 import React from "react";
 import { BsFillSendFill } from "react-icons/bs";
 
-const Chatbox: React.FC = () => {
-  // Hardcoded messages
-  const messages = [
-    { isUser: false, text: "Message from opponent." },
-    { isUser: true, text: "Message from user." },
-    // Add more messages as needed
-  ];
+export interface ChatMessage {
+  isUser: boolean;
+  text: string;
+}
 
+const Chatbox: React.FC<{ 
+  messages: ChatMessage[]; 
+  transcriptStatus: { loading: boolean; isUser: boolean }; 
+}> = ({ messages, transcriptStatus }) => {
   return (
     <div className="rounded-xl bg-card text-card-foreground shadow flex flex-col h-full">
       {/* Header */}
@@ -35,6 +36,15 @@ const Chatbox: React.FC = () => {
               {message.text}
             </div>
           ))}
+          {transcriptStatus.loading && (
+            <div
+              className={`flex w-max max-w-[75%] flex-col gap-2 rounded-lg px-3 py-2 text-sm bg-muted animate-pulse ${
+                transcriptStatus.isUser ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"
+              }`}
+            >
+              Generating transcript...
+            </div>
+          )}
         </div>
       </div>
 

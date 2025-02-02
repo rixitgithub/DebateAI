@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { AuthContext } from '../../context/authContext'; // Adjust import path
+
 
 
 interface LoginFormProps {
@@ -11,32 +13,17 @@ interface LoginFormProps {
 export const LoginForm: React.FC<LoginFormProps> = ({ startForgotPassword, infoMessage }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const authContext = useContext(AuthContext);
 
-  const baseURL = import.meta.env.VITE_BASE_URL;
+  if (!authContext) {
+    throw new Error('LoginForm must be used within an AuthProvider');
+  }
+
+  const { login, error, loading } = authContext;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    try {
-      const response = await fetch(`${baseURL}/login`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.message || 'Failed to sign in. Please try again.');
-        return;
-      }
-
-      // Handle successful login
-    } catch {
-      setError('An unexpected error occurred. Please try again later.');
-    }
+    await login(email, password);
   };
 
   return (
@@ -63,12 +50,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ startForgotPassword, infoM
           Reset Password
         </span>
       </p>
-      <Button type="submit" className="w-full">
-        Sign In With Email
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? 'Signing In...' : 'Sign In With Email'}
       </Button>
     </form>
   );
 };
+
 
 interface SignUpFormProps {
   startOtpVerification: (email: string) => void;
@@ -78,38 +66,24 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ startOtpVerification }) 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const authContext = useContext(AuthContext);
 
-  const baseURL = import.meta.env.VITE_BASE_URL;
+  if (!authContext) {
+    throw new Error('SignUpForm must be used within an AuthProvider');
+  }
+
+  const { signup, error, loading } = authContext;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
+    
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      authContext.handleError('Passwords do not match');
       return;
     }
 
-    try {
-      const response = await fetch(`${baseURL}/signup`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.message || 'Failed to sign up. Please try again.');
-        return;
-      }
-
-      // Start OTP verification phase
-      startOtpVerification(email);
-    } catch {
-      setError('An unexpected error occurred. Please try again later.');
-    }
+    await signup(email, password);
+    startOtpVerification(email);
   };
 
   return (
@@ -136,8 +110,8 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ startOtpVerification }) 
         className="mb-4"
       />
       {error && <p className="text-sm text-red-500 mb-2">{error}</p>}
-      <Button type="submit" className="w-full">
-        Sign Up With Email
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? 'Creating Account...' : 'Sign Up With Email'}
       </Button>
     </form>
   );
@@ -150,36 +124,18 @@ interface OTPVerificationFormProps {
 
 export const OTPVerificationForm: React.FC<OTPVerificationFormProps> = ({ email, handleOtpVerified }) => {
   const [otp, setOtp] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const authContext = useContext(AuthContext);
 
-  const baseURL = import.meta.env.VITE_BASE_URL;
+  if (!authContext) {
+    throw new Error('OTPVerificationForm must be used within an AuthProvider');
+  }
+
+  const { verifyEmail, error, loading } = authContext;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${baseURL}/verifyEmail`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, confirmationCode: otp }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.message || 'Failed to verify OTP. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // OTP verified successfully
-      handleOtpVerified();
-    } catch {
-      setError('An unexpected error occurred. Please try again later.');
-      setLoading(false);
-    }
+    await verifyEmail(email, otp);
+    handleOtpVerified();
   };
 
   return (
@@ -202,7 +158,6 @@ export const OTPVerificationForm: React.FC<OTPVerificationFormProps> = ({ email,
     </div>
   );
 };
-
 
 
 interface ForgotPasswordFormProps {
@@ -267,53 +222,34 @@ interface ResetPasswordFormProps {
   handlePasswordReset: () => void;
 }
 
-export const ResetPasswordForm: React.FC<ResetPasswordFormProps> = ({
-  email,
-  handlePasswordReset,
-}) => {
+interface ResetPasswordFormProps {
+  email: string;
+  handlePasswordReset: () => void;
+}
+
+export const ResetPasswordForm: React.FC<ResetPasswordFormProps> = ({ email, handlePasswordReset }) => {
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const authContext = useContext(AuthContext);
 
-  const baseURL = import.meta.env.VITE_BASE_URL;
+  if (!authContext) {
+    throw new Error('ResetPasswordForm must be used within an AuthProvider');
+  }
+
+  const { confirmForgotPassword, login, error, loading } = authContext;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
-
+    
     if (newPassword !== confirmNewPassword) {
-      setError('Passwords do not match.');
-      setLoading(false);
+      authContext.handleError('Passwords do not match');
       return;
     }
 
-    try {
-      const response = await fetch(`${baseURL}/confirmForgotPassword`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          code,
-          newPassword,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        setError(data.message || 'Failed to reset password. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Password reset successfully
-      handlePasswordReset();
-    } catch {
-      setError('An unexpected error occurred. Please try again later.');
-      setLoading(false);
-    }
+    await confirmForgotPassword(email, code, newPassword);
+    await login(email, newPassword);
+    handlePasswordReset();
   };
 
   return (

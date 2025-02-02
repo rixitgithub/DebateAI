@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { LoginForm, SignUpForm, OTPVerificationForm, ForgotPasswordForm, ResetPasswordForm } from './Authentication/forms.tsx';
-
+import { Link } from 'react-router-dom';
 
 const LeftSection = () => (
-
   <div className="hidden md:flex w-full h-full flex-col justify-between bg-muted p-10 text-white">
     <div className="flex items-center text-lg font-medium">
       <Link to="/" className="flex items-center">
-        {/* Logo and App Name */}
-        <svg /* SVG attributes */>
+        <svg>
           {/* SVG Content */}
         </svg>
         Arguehub
@@ -34,11 +32,11 @@ interface RightSectionProps {
   startOtpVerification: (email: string) => void;
   handleOtpVerified: () => void;
   startForgotPassword: () => void;
-  startResetPassword: (email: string) => void; // New prop
-  handlePasswordReset: () => void; // New prop
+  startResetPassword: (email: string) => void; 
+  handlePasswordReset: () => void; 
   emailForOTP: string;
-  emailForPasswordReset: string; // New prop
-  infoMessage: string; // New prop
+  emailForPasswordReset: string; 
+  infoMessage: string; 
 }
 
 const RightSection: React.FC<RightSectionProps> = ({
@@ -92,7 +90,6 @@ const RightSection: React.FC<RightSectionProps> = ({
   </div>
 );
 
-import { Link } from 'react-router-dom';
 
 const Authentication = () => {
   // Extend authMode to include 'resetPassword'
@@ -101,10 +98,9 @@ const Authentication = () => {
   >('login');
 
   const [emailForOTP, setEmailForOTP] = useState('');
-  const [emailForPasswordReset, setEmailForPasswordReset] = useState(''); // New state for reset password
+  const [emailForPasswordReset, setEmailForPasswordReset] = useState(''); 
   const [infoMessage, setInfoMessage] = useState('');
 
-  // Toggle between 'login' and 'signup'
   const toggleAuthMode = () => {
     setAuthMode((prevMode) => (prevMode === 'login' ? 'signup' : 'login'));
   };
@@ -139,21 +135,19 @@ const Authentication = () => {
 
   return (
     <div className="flex w-screen h-screen">
-      {/* LeftSection component remains the same */}
       <LeftSection />
 
-      {/* Pass new props to RightSection */}
       <RightSection
         authMode={authMode}
         toggleAuthMode={toggleAuthMode}
         startOtpVerification={startOtpVerification}
         handleOtpVerified={handleOtpVerified}
         startForgotPassword={startForgotPassword}
-        startResetPassword={startResetPassword} // New prop
-        handlePasswordReset={handlePasswordReset} // New prop
+        startResetPassword={startResetPassword} 
+        handlePasswordReset={handlePasswordReset} 
         emailForOTP={emailForOTP}
-        emailForPasswordReset={emailForPasswordReset} // New prop
-        infoMessage={infoMessage} // New prop
+        emailForPasswordReset={emailForPasswordReset} 
+        infoMessage={infoMessage} 
       />
     </div>
   );

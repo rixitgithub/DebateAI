@@ -3,42 +3,57 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { RiRobot2Fill } from "react-icons/ri";
 import { FaHandshakeSimpleSlash } from "react-icons/fa6";
-import { useState } from "react";
+import { useContext } from "react";
+import { AuthContext } from "@/context/authContext";
+
+{/* TODO modify the home page for already logged in and signed up state  */}
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false); 
-  var signupHandler = () => {
-    navigate('/auth', { state: { isSignUp: true } });
-  }
-  var loginHandler = () => {
-    navigate('/auth', { state: { isSignUp: false } });
-  }
+  const authContext = useContext(AuthContext);
 
+  
+
+  const signupHandler = () => {
+    navigate('/auth', { state: { isSignUp: true } });
+  };
+
+  const loginHandler = () => {
+    navigate('/auth', { state: { isSignUp: false } });
+  };
   const handlePlayDebateClick = () => {
-    if (isAuthenticated) {
-      navigate('/play');  
+    if (authContext?.isAuthenticated) {
+      navigate('/game');  
     } else {
       navigate('/auth', { state: { isSignUp: false } });
     }
   };
 
   const handlePlayBotClick = () => {
-    if (isAuthenticated) {
-      navigate('/play');  // Navigate to play page if authenticated
+    if (authContext?.isAuthenticated) {
+      navigate('/game');  // Navigate to play page if authenticated
     } else {
       navigate('/auth', { state: { isSignUp: false } });  // Navigate to login page if not authenticated
     }
   };
 
+  const logoutHandler = () =>{
+    authContext?.logout()
+    navigate("/")
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <nav className="flex items-center justify-between px-4 py-4 md:px-12">
         <h1 className="text-xl md:text-3xl font-bold">Argue-Hub</h1>
-        <div className="flex">
-          <Button className="mr-2" onClick={loginHandler}>Login</Button>
-          <Button variant="outline" onClick={signupHandler}>Sign Up</Button>
-        </div>
+          {
+            authContext?.isAuthenticated?(<Button onClick={logoutHandler}>Log out</Button>):(
+              <div className="flex">
+                <Button className="mr-2" onClick={loginHandler}>Login</Button>
+                <Button variant="outline" onClick={signupHandler}>Sign Up</Button>
+              </div>  
+            )
+          }
       </nav>
 
       <div className="flex items-center justify-center">

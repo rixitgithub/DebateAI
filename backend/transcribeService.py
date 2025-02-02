@@ -1,32 +1,22 @@
+# Python server code (FastAPI)
+from fastapi import FastAPI
 import whisper
-import sys
 import json
+
+# Initialize the FastAPI app
+app = FastAPI()
 
 # Load Whisper model
 model = whisper.load_model("base")
 
-def transcribe_realtime(audio_bytes: bytes):
+@app.post("/transcribe/batch")
+async def batch_transcription(file_path: str):
     """
-    Transcribes audio bytes and returns the text.
+    Endpoint to transcribe a batch audio file specified by its file path.
     """
-    return model.transcribe(audio_bytes, language="en")["text"]
-
-def transcribe_batch(audio_path: str):
-    """
-    Transcribes a batch audio file and returns the text.
-    """
-    return model.transcribe(audio_path, language="en")["text"]
-
-if __name__ == "__main__":
-    mode = sys.argv[1]  # "realtime" or "batch"
-    if mode == "realtime":
-        audio_data = sys.stdin.buffer.read()
-        transcription = transcribe_realtime(audio_data)
-    elif mode == "batch":
-        audio_path = sys.argv[2]
-        transcription = transcribe_batch(audio_path)
-    else:
-        raise ValueError("Unsupported mode. Use 'realtime' or 'batch'.")
-
-    # Return transcription result as JSON
-    print(json.dumps({"transcription": transcription}))
+    try:
+        # Transcribe the audio file
+        transcription = model.transcribe(file_path, language="en")['text']
+        return {"transcription": transcription}
+    except Exception as e:
+        return {"error": str(e)}
