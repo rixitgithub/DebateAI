@@ -1,31 +1,41 @@
-import { useContext, useState } from 'react'
-import './App.css'
-import AuthenticationPage from './Pages/Authentication'
-import { ThemeProvider, ThemeContext } from './context/theme-provider'
-import { Button } from './components/ui/button'
+import './App.css';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import Authentication from './Pages/Authentication';
+import Home from './Pages/Home';
+import { ThemeProvider } from './context/theme-provider';
+import DebateApp from './Pages/Game';
+import { AuthContext, AuthProvider } from  "./context/authContext";
+import { useContext, useEffect, useState } from 'react';
 
-import { LuMoon } from "react-icons/lu";
-import { LuSun } from "react-icons/lu";
+const ProtectedRoute = () => {
+  const auth = useContext(AuthContext);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(false);
+  }, [auth?.isAuthenticated]);
+
+  if (isLoading) return <div>Loading...</div>; // Show loading screen while checking auth
+
+  return auth?.isAuthenticated ? <Outlet /> : <Navigate to="/auth" replace />;
+};
 
 
-function Subscriber(){
-  const value = useContext(ThemeContext);
-  return(
-    <Button onClick={value!.toggleTheme} className='p-0 h-8 w-8 md:h-12 md:w-12 fixed right-4 bottom-4'>
-      {value?.theme ? <LuMoon className='text-xl'/> : <LuSun className="text-xl"/>}
-    </Button>
-  )
-}
 function App() {
-
   return (
-    <div>
+    <AuthProvider>
       <ThemeProvider>
-        <AuthenticationPage></AuthenticationPage>
-        {/* <Subscriber></Subscriber> */}
+          <Routes>
+            <Route path="/auth" element={<Authentication />} />
+            <Route path="/" element={<Home />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/game/:userId" element={<DebateApp />} />
+            </Route>
+          </Routes>
       </ThemeProvider>
-    </div>
-  )
+    </AuthProvider>
+  );
 }
 
-export default App
+
+export default App;
