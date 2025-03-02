@@ -4,7 +4,7 @@
 
 1. Navigate to the backend directory:
    ```sh
-   cd ./backend
+   cd backend
    ```
 2. Run the backend server:
    ```sh
@@ -15,13 +15,19 @@
 
 1. Navigate to the frontend directory:
    ```sh
-   cd ./frontend
+   cd frontend
    ```
 2. Install dependencies:
    ```sh
    npm install
    ```
-3. Start the development server:
+3. Create an environment file:
+   - Create a `.env` file in the frontend directory.
+   - Add the following environment variables:
+     ```sh
+     VITE_BASE_URL="http://localhost:<BACKEND_SERVER_PORT>"
+     ```
+4. Start the development server:
    ```sh
    npm run dev
    ```
@@ -43,10 +49,22 @@ Follow these steps to configure Amazon Cognito for authentication:
 
 4. **Update Application Configuration**
    - Add the retrieved credentials to your application's configuration file (e.g., `config.yml`).
+   - Enable the following settings in Cognito's app-client:
+     - Choice-based sign-in
+     - Username and password authentication
+     - Get user tokens from existing authenticated sessions
+     - Secure Remote Password (SRP) protocol
 
 For more details, refer to the [official AWS documentation](https://docs.aws.amazon.com/cognito/).
 
+## Setting Up OpenAI API Key
+
+To use OpenAI services, obtain an API key from OpenRouter:
+
+1. Visit [OpenRouter](https://openrouter.ai/) and sign up if you don't have an account.
+2. Generate an API key from your OpenRouter dashboard.
+3. Add the API key to your `config.yml` file.
+
 ---
 
-This guide follows the approach used in the project implementation. If you encounter any issues, check the AWS documentation or relevant project files.
-
+This guide follows the project implementation approach. If you encounter any issues, check the AWS documentation or relevant project files.
