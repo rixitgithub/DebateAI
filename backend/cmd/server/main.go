@@ -58,7 +58,6 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		AllowCredentials: true,
 	}))
 
-	// Handle preflight OPTIONS requests
 	router.OPTIONS("/*path", func(c *gin.Context) {
 		c.Status(204)
 	})

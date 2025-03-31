@@ -23,7 +23,7 @@ type Config struct {
 		GptApiKey string `yaml:"gptApiKey"`
 	} `yaml:"openai"`
 
-	Database struct { 
+	Database struct {
 		URI string `yaml:"uri"`
 	} `yaml:"database"`
 }
