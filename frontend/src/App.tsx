@@ -12,6 +12,8 @@ import Profile from "./Pages/Profile";
 import Leaderboard from "./Pages/Leaderboard";
 import StartDebate from "./Pages/StartDebate";
 import About from "./Pages/About";
+import BotSelection from "./Pages/BotSelection";
+import DebateRoom from "./Pages/DebateRoom";
 
 // Layout
 import Layout from "./components/Layout";
@@ -67,7 +69,9 @@ function AppRoutes() {
           <Route path="profile" element={<Profile />} />
           <Route path="about" element={<About />} />
           <Route path="game/:userId" element={<DebateApp />} />
+          <Route path="bot-selection" element={<BotSelection />} />
         </Route>
+        <Route path="/debate/:roomId" element={<DebateRoom />} />
       </Route>
 
       {/* Redirect unknown routes */}

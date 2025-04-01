@@ -24,7 +24,7 @@ const StartDebate: React.FC = () => {
 
   const handlePlayBotClick = () => {
     if (authContext?.isAuthenticated) {
-      navigate("/game") 
+      navigate("/bot-selection") 
     } else {
       navigate("/auth", { state: { isSignUp: false } })
     }

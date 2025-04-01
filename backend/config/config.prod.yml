@@ -1,5 +1,5 @@
 server:
-  port: 1313
+ port: 1313
 
 cognito:
   appClientId: <your-cognito-app-client-id>
@@ -12,3 +12,6 @@ openai:
 
 database:
   uri: "<your-mongodb-connection-string>"
+
+gemini:
+  apiKey: "<your-gemini-api-key>"

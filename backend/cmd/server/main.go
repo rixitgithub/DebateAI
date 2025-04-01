@@ -8,6 +8,7 @@ import (
 	"arguehub/db"
 	"arguehub/middlewares"
 	"arguehub/routes"
+	"arguehub/services"
 	"arguehub/utils"
 	"arguehub/websocket"
 
@@ -22,6 +23,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	services.InitDebateVsBotService(cfg)
 	// Establish a connection to MongoDB using the URI from the configuration
 	if err := db.ConnectMongoDB(cfg.Database.URI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
@@ -87,6 +89,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 
 		// Update ELO score after a debate (e.g., for leaderboard updates)
 		auth.POST("/debate/result", routes.UpdateEloAfterDebateRouteHandler)
+
+		routes.SetupDebateVsBotRoutes(auth)
 	}
 
 	return router
