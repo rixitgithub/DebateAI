@@ -17,6 +17,7 @@ import DebateRoom from "./Pages/DebateRoom";
 
 // Layout
 import Layout from "./components/Layout";
+import OnlineDebateRoom from "./Pages/OnlineDebateRoom";
 
 // Protects routes based on authentication status
 function ProtectedRoute() {
@@ -72,6 +73,7 @@ function AppRoutes() {
           <Route path="bot-selection" element={<BotSelection />} />
         </Route>
         <Route path="/debate/:roomId" element={<DebateRoom />} />
+        <Route path="/debate-room/:roomId" element={<OnlineDebateRoom />} />
       </Route>
 
       {/* Redirect unknown routes */}

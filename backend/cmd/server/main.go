@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"strconv"
 
 	"arguehub/config"
@@ -24,22 +25,24 @@ func main() {
 	}
 
 	services.InitDebateVsBotService(cfg)
-	// Establish a connection to MongoDB using the URI from the configuration
+	// Connect to MongoDB using the URI from the configuration
 	if err := db.ConnectMongoDB(cfg.Database.URI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	log.Println("Connected to MongoDB")
 
-	// Populate initial debate-related data (custom data seeding utility function)
+	// Seed initial debate-related data
 	utils.SeedDebateData()
 	utils.PopulateTestUsers()
 
-	// Set up the Gin router and configure CORS, middleware, and routes
+	// Create uploads directory
+	os.MkdirAll("uploads", os.ModePerm)
+
+	// Set up the Gin router and configure routes
 	router := setupRouter(cfg)
 	port := strconv.Itoa(cfg.Server.Port)
 	log.Printf("Server starting on port %s", port)
 
-	// Start the server on the configured port
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
@@ -48,49 +51,41 @@ func main() {
 func setupRouter(cfg *config.Config) *gin.Engine {
 	router := gin.Default()
 
-	// Set trusted proxies to prevent reverse proxy issues in certain deployment scenarios
+	// Set trusted proxies (adjust as needed)
 	router.SetTrustedProxies([]string{"127.0.0.1", "localhost"})
 
-	// Apply CORS policy to allow requests from the frontend (localhost:5173)
+	// Configure CORS for your frontend (e.g., localhost:5173 for Vite)
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"}, // Allow frontend on localhost
+		AllowOrigins:     []string{"http://localhost:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	}))
+	router.OPTIONS("/*path", func(c *gin.Context) { c.Status(204) })
 
-	// Handle preflight OPTIONS requests
-	router.OPTIONS("/*path", func(c *gin.Context) {
-		c.Status(204)
-	})
+	// Public routes for authentication
+	router.POST("/signup", routes.SignUpRouteHandler)
+	router.POST("/verifyEmail", routes.VerifyEmailRouteHandler)
+	router.POST("/login", routes.LoginRouteHandler)
+	router.POST("/forgotPassword", routes.ForgotPasswordRouteHandler)
+	router.POST("/confirmForgotPassword", routes.VerifyForgotPasswordRouteHandler)
+	router.POST("/verifyToken", routes.VerifyTokenRouteHandler)
 
-	// Public routes for authentication and user actions
-	router.POST("/signup", routes.SignUpRouteHandler)                              // Handle user signup
-	router.POST("/verifyEmail", routes.VerifyEmailRouteHandler)                    // Verify user email
-	router.POST("/login", routes.LoginRouteHandler)                                // Handle user login
-	router.POST("/forgotPassword", routes.ForgotPasswordRouteHandler)              // Handle forgotten password requests
-	router.POST("/confirmForgotPassword", routes.VerifyForgotPasswordRouteHandler) // Verify password reset token
-	router.POST("/verifyToken", routes.VerifyTokenRouteHandler)                    // Verify token (JWT or other)
-
-	// WebSocket route for real-time communication
-	router.GET("/ws", websocket.WebsocketHandler)
-
-	// Protected routes requiring authentication (JWT validation)
+	// Protected routes (JWT auth)
 	auth := router.Group("/")
-	auth.Use(middlewares.AuthMiddleware("./config/config.prod.yml")) // Apply custom authentication middleware
+	auth.Use(middlewares.AuthMiddleware("./config/config.prod.yml"))
 	{
-		// Profile management routes
-		auth.GET("/user/fetchprofile", routes.GetProfileRouteHandler)     // Fetch user profile data
-		auth.PUT("/user/updateprofile", routes.UpdateProfileRouteHandler) // Update user profile
-
-		// Get leaderboard with user rankings based on debates
+		auth.GET("/user/fetchprofile", routes.GetProfileRouteHandler)
+		auth.PUT("/user/updateprofile", routes.UpdateProfileRouteHandler)
 		auth.GET("/leaderboard", routes.GetLeaderboardRouteHandler)
-
-		// Update ELO score after a debate (e.g., for leaderboard updates)
 		auth.POST("/debate/result", routes.UpdateEloAfterDebateRouteHandler)
-
 		routes.SetupDebateVsBotRoutes(auth)
+
+		// WebSocket signaling endpoint
+		auth.GET("/ws", websocket.WebsocketHandler)
+
+		routes.SetupTranscriptRoutes(auth)
 	}
 
 	return router
