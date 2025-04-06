@@ -25,6 +25,7 @@ func main() {
 	}
 
 	services.InitDebateVsBotService(cfg)
+	services.InitCoachService()
 	// Connect to MongoDB using the URI from the configuration
 	if err := db.ConnectMongoDB(cfg.Database.URI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
@@ -86,6 +87,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		auth.GET("/ws", websocket.WebsocketHandler)
 
 		routes.SetupTranscriptRoutes(auth)
+		auth.GET("/coach/strengthen-argument/weak-statement", routes.GetWeakStatement)
+		auth.POST("/coach/strengthen-argument/evaluate", routes.EvaluateStrengthenedArgument)
 	}
 
 	return router

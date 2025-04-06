@@ -14,16 +14,17 @@ import StartDebate from "./Pages/StartDebate";
 import About from "./Pages/About";
 import BotSelection from "./Pages/BotSelection";
 import DebateRoom from "./Pages/DebateRoom";
+import OnlineDebateRoom from "./Pages/OnlineDebateRoom";
+import StrengthenArgument from "./Pages/StrengthenArgument"; // Add this import
 
 // Layout
 import Layout from "./components/Layout";
-import OnlineDebateRoom from "./Pages/OnlineDebateRoom";
+import CoachPage from "./Pages/CoachPage";
 
 // Protects routes based on authentication status
 function ProtectedRoute() {
   const authContext = useContext(AuthContext);
 
-  // Throw error if context is undefined (shouldn't happen within AuthProvider)
   if (!authContext) {
     throw new Error("ProtectedRoute must be used within an AuthProvider");
   }
@@ -40,7 +41,6 @@ function ProtectedRoute() {
 function AppRoutes() {
   const authContext = useContext(AuthContext);
 
-  // Throw error if context is undefined (shouldn't happen within AuthProvider)
   if (!authContext) {
     throw new Error("AppRoutes must be used within an AuthProvider");
   }
@@ -71,6 +71,8 @@ function AppRoutes() {
           <Route path="about" element={<About />} />
           <Route path="game/:userId" element={<DebateApp />} />
           <Route path="bot-selection" element={<BotSelection />} />
+        <Route path="/coach" element={<CoachPage />} />
+          <Route path="coach/strengthen-argument" element={<StrengthenArgument />} /> {/* Add this route */}
         </Route>
         <Route path="/debate/:roomId" element={<DebateRoom />} />
         <Route path="/debate-room/:roomId" element={<OnlineDebateRoom />} />
