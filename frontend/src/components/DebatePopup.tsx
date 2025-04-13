@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
+import RoomBrowser from "./RoomBrowser";
 
 interface DebatePopupProps {
   onClose: () => void;
@@ -10,25 +11,47 @@ const DebatePopup: React.FC<DebatePopupProps> = ({ onClose }) => {
   const navigate = useNavigate();
   const [roomCode, setRoomCode] = useState("");
 
-  const generateRoomCode = () => Math.random().toString(36).substring(2, 8);
-
+  // Handler to join a debate room by sending the room code via navigation.
   const handleJoinRoom = () => {
     if (roomCode.trim() === "") return;
     navigate(`/debate-room/${roomCode}`);
     onClose();
   };
 
-  const handleCreateRoom = () => {
-    const newRoomCode = generateRoomCode();
-    navigate(`/debate-room/${newRoomCode}`);
-    onClose();
+  // Handler to create a new room by sending a POST request to the backend.
+  const handleCreateRoom = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      // Sending a POST request to create a new room.
+      // You might also send additional parameters (e.g., room type, settings).
+      const response = await fetch("http://localhost:1313/rooms", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+         },
+        // Here we send an example payload with the room type.
+        body: JSON.stringify({ type: "public" }),
+      });
+      if (!response.ok) {
+        alert("Error creating room.");
+        return;
+      }
+      const room = await response.json();
+      navigate(`/debate-room/${room.id}`);
+      onClose();
+    } catch (error) {
+      console.error("Error creating room:", error);
+      alert("Error creating room.");
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="relative bg-card text-foreground p-6 rounded-lg shadow-lg w-[32rem] flex flex-col">
-        <button 
-          onClick={onClose} 
+      {/* Modal Card with a max-height so that it does not exceed the viewport */}
+      <div className="relative bg-card text-foreground p-6 rounded-lg shadow-lg w-[42rem] flex flex-col max-h-[100vh]">
+        <button
+          onClick={onClose}
           className="absolute top-3 right-3 text-muted-foreground hover:text-foreground"
         >
           <X size={20} />
@@ -70,6 +93,14 @@ const DebatePopup: React.FC<DebatePopupProps> = ({ onClose }) => {
           >
             Join Room
           </button>
+        </div>
+
+        {/* RoomBrowser wrapped in a scrollable container that kicks in once the height reaches 100vh */}
+        <div
+          className="mt-8 overflow-y-auto"
+          style={{ maxHeight: "calc(100vh - 300px)" }}
+        >
+          <RoomBrowser />
         </div>
       </div>
     </div>

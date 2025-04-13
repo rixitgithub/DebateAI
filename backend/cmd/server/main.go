@@ -89,6 +89,11 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		routes.SetupTranscriptRoutes(auth)
 		auth.GET("/coach/strengthen-argument/weak-statement", routes.GetWeakStatement)
 		auth.POST("/coach/strengthen-argument/evaluate", routes.EvaluateStrengthenedArgument)
+
+		// Add Room routes.
+		auth.GET("/rooms", routes.GetRoomsHandler)
+		auth.POST("/rooms", routes.CreateRoomHandler)
+		auth.POST("/rooms/:id/join", routes.JoinRoomHandler)
 	}
 
 	return router
