@@ -73,6 +73,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	router.POST("/confirmForgotPassword", routes.VerifyForgotPasswordRouteHandler)
 	router.POST("/verifyToken", routes.VerifyTokenRouteHandler)
 
+	
+
 	// Protected routes (JWT auth)
 	auth := router.Group("/")
 	auth.Use(middlewares.AuthMiddleware("./config/config.prod.yml"))
@@ -94,6 +96,10 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		auth.GET("/rooms", routes.GetRoomsHandler)
 		auth.POST("/rooms", routes.CreateRoomHandler)
 		auth.POST("/rooms/:id/join", routes.JoinRoomHandler)
+
+		auth.GET("/chat/:roomId", websocket.RoomChatHandler)
+
+
 	}
 
 	return router

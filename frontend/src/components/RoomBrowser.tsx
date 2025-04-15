@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {  useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 interface Participant {
   id: string;
@@ -34,19 +34,19 @@ const RoomBrowser: React.FC = () => {
         return;
       }
       const data = await response.json();
-if (!data || !Array.isArray(data)) {
-  console.warn("Invalid response data for rooms:", data);
-  setRooms([]);
-  return;
-}
+      if (!data || !Array.isArray(data)) {
+        console.warn("Invalid response data for rooms:", data);
+        setRooms([]);
+        return;
+      }
 
-// Ensure each room has participants as an array
-const normalizedRooms = data.map((room: Room) => ({
-  ...room,
-  participants: room.participants ?? [], // fallback to [] if null
-}));
+      // Ensure each room has participants as an array
+      const normalizedRooms = data.map((room: Room) => ({
+        ...room,
+        participants: room.participants ?? [],
+      }));
 
-setRooms(normalizedRooms);
+      setRooms(normalizedRooms);
     } catch (error) {
       console.error("Error fetching rooms:", error);
     } finally {
@@ -79,6 +79,11 @@ setRooms(normalizedRooms);
       console.error("Error joining match:", error);
       alert("An error occurred while joining the match.");
     }
+  };
+
+  const handleViewDebate = (roomId: string) => {
+    // Navigate to the chatroom page where the client will then connect to ws://localhost:8080/chat/:roomId
+    navigate(`/spectator/${roomId}`);
   };
 
   const getAverageElo = (participants: Participant[] | null): number => {
@@ -129,12 +134,33 @@ setRooms(normalizedRooms);
                       )}
                     </td>
                     <td className="px-6 py-4">{memberCount > 0 ? avgElo : "--"}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 flex flex-col sm:flex-row gap-2">
                       <button
                         onClick={() => handleJoinMatch(room.id)}
                         className="bg-primary text-primary-foreground py-2 px-4 rounded shadow hover:bg-primary/90 transition"
                       >
                         Join Match
+                      </button>
+                      <button
+                        onClick={() => handleViewDebate(room.id)}
+                        className="bg-secondary text-secondary-foreground py-2 px-4 rounded shadow hover:bg-secondary/90 transition flex items-center gap-1"
+                      >
+                        {/* Inline SVG icon for debate (e.g., chat bubble icon) */}
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 10h.01M12 10h.01M16 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        View Debate
                       </button>
                     </td>
                   </tr>

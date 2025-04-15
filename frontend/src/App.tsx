@@ -20,6 +20,7 @@ import StrengthenArgument from "./Pages/StrengthenArgument"; // Add this import
 // Layout
 import Layout from "./components/Layout";
 import CoachPage from "./Pages/CoachPage";
+import ChatRoom from "./components/ChatRoom";
 
 // Protects routes based on authentication status
 function ProtectedRoute() {
@@ -76,6 +77,7 @@ function AppRoutes() {
         </Route>
         <Route path="/debate/:roomId" element={<DebateRoom />} />
         <Route path="/debate-room/:roomId" element={<OnlineDebateRoom />} />
+        <Route path="/spectator/:roomId" element={<ChatRoom />} />
       </Route>
 
       {/* Redirect unknown routes */}
