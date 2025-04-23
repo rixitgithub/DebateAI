@@ -1,7 +1,7 @@
 // src/components/Sidebar.tsx
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { MessageSquare, BarChart, User, Info } from "lucide-react";
+import { MessageSquare, BarChart, User, Info, Trophy } from "lucide-react";
 import debateAiLogo from "@/assets/aossie.png";
 
 function Sidebar() {
@@ -18,13 +18,17 @@ function Sidebar() {
           />
         </div>
       </div>
-
       {/* Nav links */}
       <nav className="flex-1 px-2 py-4 space-y-2">
         <NavItem
           to="/startDebate"
           label="Start Debate"
           icon={<MessageSquare className="mr-3 h-4 w-4" />}
+        />
+        <NavItem
+          to="/tournaments"
+          label="Tournaments"
+          icon={<Trophy className="mr-3 h-4 w-4" />}
         />
         <NavItem
           to="/leaderboard"
