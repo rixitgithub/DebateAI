@@ -89,6 +89,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		routes.SetupTranscriptRoutes(auth)
 		auth.GET("/coach/strengthen-argument/weak-statement", routes.GetWeakStatement)
 		auth.POST("/coach/strengthen-argument/evaluate", routes.EvaluateStrengthenedArgument)
+		auth.GET("/coach/pros-cons/topic", routes.GetProsConsTopic)
+        auth.POST("/coach/pros-cons/submit", routes.SubmitProsCons)
 	}
 
 	return router

@@ -20,6 +20,7 @@ import StrengthenArgument from "./Pages/StrengthenArgument"; // Add this import
 // Layout
 import Layout from "./components/Layout";
 import CoachPage from "./Pages/CoachPage";
+import ProsConsChallenge from "./Pages/ProsConsChallenge";
 
 // Protects routes based on authentication status
 function ProtectedRoute() {
@@ -73,6 +74,7 @@ function AppRoutes() {
           <Route path="bot-selection" element={<BotSelection />} />
         <Route path="/coach" element={<CoachPage />} />
           <Route path="coach/strengthen-argument" element={<StrengthenArgument />} /> {/* Add this route */}
+          <Route path="coach/pros-cons" element={<ProsConsChallenge />} />
         </Route>
         <Route path="/debate/:roomId" element={<DebateRoom />} />
         <Route path="/debate-room/:roomId" element={<OnlineDebateRoom />} />
