@@ -1,4 +1,3 @@
-// src/Pages/ProsConsChallenge.tsx
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,8 +19,8 @@ interface Evaluation {
 const ProsConsChallenge: React.FC = () => {
   const [token, setToken] = useState<string | null>(null);
   const [topic, setTopic] = useState<string | null>(null);
-  const [pros, setPros] = useState<string[]>([""]);
-  const [cons, setCons] = useState<string[]>([""]);
+  const [pros, setPros] = useState<string[]>(["", "", "", "", ""]);
+  const [cons, setCons] = useState<string[]>(["", "", "", "", ""]);
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,14 +59,6 @@ const ProsConsChallenge: React.FC = () => {
     }
   };
 
-  const addArgument = (type: "pros" | "cons") => {
-    if (type === "pros" && pros.length < 5) {
-      setPros([...pros, ""]);
-    } else if (type === "cons" && cons.length < 5) {
-      setCons([...cons, ""]);
-    }
-  };
-
   const updateArgument = (type: "pros" | "cons", index: number, value: string) => {
     if (type === "pros") {
       const newPros = [...pros];
@@ -82,7 +73,9 @@ const ProsConsChallenge: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!token || !topic) return;
-    if (pros.filter(p => p.trim()).length === 0 || cons.filter(c => c.trim()).length === 0) {
+    const validPros = pros.filter(p => p.trim());
+    const validCons = cons.filter(c => c.trim());
+    if (validPros.length === 0 || validCons.length === 0) {
       setError("Please provide at least one pro and one con.");
       return;
     }
@@ -95,7 +88,7 @@ const ProsConsChallenge: React.FC = () => {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ topic, pros: pros.filter(p => p.trim()), cons: cons.filter(c => c.trim()) }),
+        body: JSON.stringify({ topic, pros: validPros, cons: validCons }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to evaluate arguments");
@@ -110,8 +103,8 @@ const ProsConsChallenge: React.FC = () => {
 
   const resetChallenge = () => {
     setTopic(null);
-    setPros([""]);
-    setCons([""]);
+    setPros(["", "", "", "", ""]);
+    setCons(["", "", "", "", ""]);
     setEvaluation(null);
     setCurrentStep(1);
     setError(null);
@@ -122,7 +115,7 @@ const ProsConsChallenge: React.FC = () => {
       <header className="mb-8 border-b border-border pb-4">
         <h1 className="text-4xl font-extrabold mb-2">Pros and Cons Challenge</h1>
         <p className="text-lg text-muted-foreground">
-          Test your argumentation skills by generating up to 5 pros and 5 cons for a debate topic!
+          Test your argumentation skills by filling up to 5 pros and 5 cons for a debate topic!
         </p>
       </header>
 
@@ -184,11 +177,6 @@ const ProsConsChallenge: React.FC = () => {
                     className="mb-2 bg-input text-foreground border-border min-h-[80px]"
                   />
                 ))}
-                {pros.length < 5 && (
-                  <Button onClick={() => addArgument("pros")} className="mt-2">
-                    Add Pro
-                  </Button>
-                )}
               </div>
               <div>
                 <h3 className="text-lg font-medium mb-2">Cons (up to 5)</h3>
@@ -201,11 +189,6 @@ const ProsConsChallenge: React.FC = () => {
                     className="mb-2 bg-input text-foreground border-border min-h-[80px]"
                   />
                 ))}
-                {cons.length < 5 && (
-                  <Button onClick={() => addArgument("cons")} className="mt-2">
-                    Add Con
-                  </Button>
-                )}
               </div>
             </div>
             <Button
@@ -227,8 +210,8 @@ const ProsConsChallenge: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-center mb-6">
-              <h2 className="text-3xl font-bold text-primary">Final Score: {evaluation.score}</h2>
-              <p className="text-muted-foreground">Out of {10 * (evaluation.pros.length + evaluation.cons.length)}</p>
+              <h2 className="text-3xl font-bold text-primary">Final Score: {evaluation.score}/100</h2>
+              <p className="text-muted-foreground">Based on {evaluation.pros.length} pros and {evaluation.cons.length} cons submitted</p>
             </div>
             <div className="grid grid-cols-2 gap-6">
               <div>
