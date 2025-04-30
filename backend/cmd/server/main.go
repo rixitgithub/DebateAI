@@ -100,6 +100,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		auth.GET("/chat/:roomId", websocket.RoomChatHandler)
 
 
+		auth.GET("/coach/pros-cons/topic", routes.GetProsConsTopic)
+        auth.POST("/coach/pros-cons/submit", routes.SubmitProsCons)
 	}
 
 	return router
