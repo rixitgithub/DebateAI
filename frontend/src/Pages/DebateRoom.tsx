@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { Button } from "../components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { sendDebateMessage, judgeDebate } from "@/services/vsbot";
 import JudgmentPopup from "@/components/JudgementPopup";

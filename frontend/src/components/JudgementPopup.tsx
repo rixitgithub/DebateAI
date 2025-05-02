@@ -26,18 +26,36 @@ type JudgmentData = JudgmentDataUserBot | JudgmentDataForAgainst;
 
 type JudgmentPopupProps = {
   judgment: JudgmentData;
-  // For DebateRoom (user vs. bot)
   userAvatar?: string;
   botAvatar?: string;
   botName?: string;
   userStance?: string;
   botStance?: string;
   botDesc?: string;
-  // For OnlineDebateRoom (for vs. against)
-  forRole?: string; // e.g., "You" or "Opponent"
-  againstRole?: string; // e.g., "You" or "Opponent"
+  forRole?: string;
+  againstRole?: string;
   onClose: () => void;
 };
+
+// Define Debate Coach skills
+type CoachSkill = {
+  title: string;
+  description: string;
+  url: string;
+};
+
+const coachSkills: CoachSkill[] = [
+  {
+    title: "Strengthen Argument",
+    description: "Master the art of crafting compelling, persuasive arguments that win debates.",
+    url: "http://localhost:5173/coach/strengthen-argument",
+  },
+  {
+    title: "Pros and Cons Challenge",
+    description: "Test your critical thinking by crafting up to 5 pros and cons for engaging debate topics.",
+    url: "http://localhost:5173/coach/pros-cons",
+  },
+];
 
 const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
   judgment,
@@ -52,20 +70,17 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate();
-  const userName = "You"; // Default for DebateRoom; could be dynamic
+  const userName = "You";
 
-  // Fetch avatars from localStorage with fallbacks
   const localAvatar = localStorage.getItem('userAvatar') || 'https://avatar.iran.liara.run/public/40';
   const opponentAvatar = localStorage.getItem('opponentAvatar') || 'https://avatar.iran.liara.run/public/31';
 
-  // Determine if we're dealing with user/bot or for/against format
   const isUserBotFormat = "user" in judgment.opening_statement;
   const player1Name = isUserBotFormat ? userName : (forRole || "For Debater");
   const player2Name = isUserBotFormat ? (botName || "Bot") : (againstRole || "Against Debater");
   const player1Stance = isUserBotFormat ? userStance : "For";
   const player2Stance = isUserBotFormat ? botStance : "Against";
 
-  // Assign avatars based on forRole and againstRole for user vs. user scenario
   const player1Avatar = isUserBotFormat
     ? userAvatar
     : (forRole === "You" ? localAvatar : opponentAvatar);
@@ -117,12 +132,70 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
     }
   };
 
+  // Logic to recommend skills based on performance
+  const recommendSkills = (): CoachSkill[] => {
+    const recommended: CoachSkill[] = [];
+    const player1Scores = {
+      opening: getScoreAndReason("opening_statement", "player1").score,
+      cross_questions: isUserBotFormat
+        ? getScoreAndReason("cross_examination", "player1").score
+        : getScoreAndReason("cross_examination_questions", "player1").score,
+      cross_answers: isUserBotFormat
+        ? getScoreAndReason("answers", "player1").score
+        : getScoreAndReason("cross_examination_answers", "player1").score,
+      closing: getScoreAndReason("closing", "player1").score,
+    };
+    const player1Reasons = {
+      opening: getScoreAndReason("opening_statement", "player1").reason.toLowerCase(),
+      cross_questions: isUserBotFormat
+        ? getScoreAndReason("cross_examination", "player1").reason.toLowerCase()
+        : getScoreAndReason("cross_examination_questions", "player1").reason.toLowerCase(),
+      cross_answers: isUserBotFormat
+        ? getScoreAndReason("answers", "player1").reason.toLowerCase()
+        : getScoreAndReason("cross_examination_answers", "player1").reason.toLowerCase(),
+      closing: getScoreAndReason("closing", "player1").reason.toLowerCase(),
+    };
+
+    // Strengthen Argument: Low scores in opening/closing or weak argument-related feedback
+    if (
+      player1Scores.opening <= 6 ||
+      player1Scores.closing <= 6 ||
+      player1Reasons.opening.includes("weak") ||
+      player1Reasons.opening.includes("unclear") ||
+      player1Reasons.opening.includes("persuasive") ||
+      player1Reasons.closing.includes("weak") ||
+      player1Reasons.closing.includes("unclear") ||
+      player1Reasons.closing.includes("persuasive")
+    ) {
+      recommended.push(coachSkills[0]);
+    }
+
+    // Pros and Cons Challenge: Low scores in cross-examination or critical thinking-related feedback
+    if (
+      player1Scores.cross_questions <= 6 ||
+      player1Scores.cross_answers <= 6 ||
+      player1Reasons.cross_questions.includes("relevance") ||
+      player1Reasons.cross_questions.includes("thinking") ||
+      player1Reasons.cross_answers.includes("coherence") ||
+      player1Reasons.cross_answers.includes("evasion")
+    ) {
+      recommended.push(coachSkills[1]);
+    }
+
+    // Default: Recommend both if no specific issues or multiple areas need work
+    if (recommended.length === 0 || recommended.length > 1) {
+      return coachSkills;
+    }
+    return recommended;
+  };
+
+  const recommendedSkills = recommendSkills();
+
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50 p-4">
-      <div className="bg-gradient-to-br from-white to-gray-100 p-8 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-gray-200 transform transition-all duration-300 scale-100 hover:scale-102">
+      <div className="bg-gradient-to-br from-white to-gray-100 p-8 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-orange-200 transform transition-all duration-300 scale-100 hover:scale-102">
         {/* Top Profile Section */}
         <div className="flex justify-between items-center mb-8">
-          {/* Player 1 Profile */}
           <div className="flex items-center space-x-4 bg-gray-50 p-4 rounded-lg shadow-sm w-1/2 mr-2">
             <img
               src={player1Avatar}
@@ -137,7 +210,6 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
               <p className="text-xs text-gray-500">Debater</p>
             </div>
           </div>
-          {/* Player 2 Profile */}
           <div className="flex items-center space-x-4 bg-gray-50 p-4 rounded-lg shadow-sm w-1/2 ml-2">
             <img
               src={player2Avatar}
@@ -156,7 +228,6 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
 
         {/* Phase Sections */}
         <div className="space-y-10">
-          {/* Opening Statement */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-2xl font-bold text-gray-800 text-center mb-6">Opening Statement</h3>
             <div className="grid grid-cols-2 gap-6">
@@ -173,7 +244,6 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
             </div>
           </div>
 
-          {/* Cross Examination */}
           {isUserBotFormat ? (
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h3 className="text-2xl font-bold text-gray-800 text-center mb-6">Cross Examination</h3>
@@ -225,7 +295,6 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
             </>
           )}
 
-          {/* Answers (only for user/bot format) */}
           {isUserBotFormat && (
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h3 className="text-2xl font-bold text-gray-800 text-center mb-6">Answers to Cross Examination</h3>
@@ -244,7 +313,6 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
             </div>
           )}
 
-          {/* Closing Statement */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-2xl font-bold text-gray-800 text-center mb-6">Closing Statement</h3>
             <div className="grid grid-cols-2 gap-6">
@@ -285,6 +353,28 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
           <p className="mt-4 text-3xl font-bold">{judgment.verdict.winner} Wins!</p>
           <p className="mt-3 text-lg">{judgment.verdict.congratulations}</p>
           <p className="mt-2 text-md leading-relaxed">{judgment.verdict.opponent_analysis}</p>
+        </div>
+
+        {/* Skills to Improve */}
+        <div className="mt-10 bg-white p-6 rounded-lg shadow-md">
+          <h3 className="text-2xl font-bold text-gray-800 text-center mb-6">Skills to Improve with Debate Coach</h3>
+          <p className="text-center text-gray-600 mb-6">Based on your performance, we recommend practicing these skills to enhance your debating abilities:</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {recommendedSkills.map((skill) => (
+              <div key={skill.title} className="p-4 bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+                <h4 className="text-lg font-semibold text-gray-700">{skill.title}</h4>
+                <p className="mt-2 text-sm text-gray-600 leading-relaxed">{skill.description}</p>
+                <a
+                  href={skill.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-block bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 transform hover:scale-105"
+                >
+                  Start Now
+                </a>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Buttons */}
