@@ -2,32 +2,25 @@ package utils
 
 import (
 	"crypto/hmac"
-	"crypto/sha256"
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
 	"regexp"
+	"time"
 
-	"arguehub/config"
+	"crypto/sha256"
 
-	awsConfig "github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
-// Config holds Cognito secret configuration
-type Config struct {
-	CognitoSecret string `json:"cognito_secret"`
-}
-
-// GenerateSecretHash creates a secret hash for Cognito flows
-func GenerateSecretHash(username, clientId, clientSecret string) string {
-	hmacInstance := hmac.New(sha256.New, []byte(clientSecret))
-	hmacInstance.Write([]byte(username + clientId))
-	secretHashByte := hmacInstance.Sum(nil)
-	return base64.StdEncoding.EncodeToString(secretHashByte)
-}
+var (
+	ErrInvalidToken = errors.New("invalid token")
+	ErrTokenExpired = errors.New("token has expired")
+)
 
 // ExtractNameFromEmail extracts the username before '@'
 func ExtractNameFromEmail(email string) string {
@@ -39,55 +32,111 @@ func ExtractNameFromEmail(email string) string {
 	return match[1]
 }
 
-func ValidateTokenAndFetchEmail(configPath, token string, ctx *gin.Context) (bool, string, error) {
-	log.Printf("Starting token validation...")
-	log.Printf("Attempting to load config from path: %s", configPath) // Log path every time
-
-	// Load application config
-	cfg, err := config.LoadConfig(configPath)
+// Password Hashing Functions
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Error loading config: %v", err)
-		return false, "", fmt.Errorf("failed to load config: %v", err)
+		log.Printf("Error hashing password: %v", err)
+		return "", fmt.Errorf("failed to hash password")
 	}
-	log.Println("Config loaded successfully.")
+	return string(bytes), nil
+}
 
-	// Initialize AWS config with region
-	awsCfg, err := awsConfig.LoadDefaultConfig(ctx, awsConfig.WithRegion(cfg.Cognito.Region))
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+// JWT Functions
+type Claims struct {
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
+	jwt.RegisteredClaims
+}
+
+func GenerateJWTToken(userID, email string) (string, error) {
+	expirationTime := time.Now().Add(24 * time.Hour)
+
+	claims := &Claims{
+		UserID: userID,
+		Email:  email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	jwtSecret := []byte(getJWTSecret())
+
+	signedToken, err := token.SignedString(jwtSecret)
 	if err != nil {
-		log.Printf("Error loading AWS config: %v", err)
-		return false, "", fmt.Errorf("failed to load AWS config: %v", err)
+		log.Printf("Error signing token: %v", err)
+		return "", fmt.Errorf("failed to generate token")
 	}
-	log.Println("AWS config loaded successfully.")
 
-	// Create Cognito client
-	cognitoClient := cognitoidentityprovider.NewFromConfig(awsCfg)
-	log.Println("Cognito client initialized.")
+	return signedToken, nil
+}
 
-	// Validate token with Cognito GetUser
-	getUserOutput, err := cognitoClient.GetUser(ctx, &cognitoidentityprovider.GetUserInput{
-		AccessToken: &token,
-	})
-	if err != nil {
-		log.Printf("Token validation failed: %v", err)
-		return false, "", fmt.Errorf("token validation failed: %v", err)
-	}
-	log.Println("Token validation successful.")
+func ParseJWTToken(tokenString string) (*Claims, error) {
+	claims := &Claims{}
+	jwtSecret := []byte(getJWTSecret())
 
-	// Extract email from user attributes
-	var email string
-	for _, attr := range getUserOutput.UserAttributes {
-		log.Printf("Found attribute: %s = %s", *attr.Name, *attr.Value)
-		if *attr.Name == "email" {
-			email = *attr.Value
-			break
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrTokenExpired
+		}
+		return nil, ErrInvalidToken
 	}
 
-	if email == "" {
-		log.Println("Email not found in token.")
-		return false, "", errors.New("email not found in token")
+	if !token.Valid {
+		return nil, ErrInvalidToken
 	}
 
-	log.Printf("Email retrieved successfully: %s", email)
-	return true, email, nil
+	return claims, nil
+}
+
+// Token Generation
+func GenerateRandomToken(length int) (string, error) {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("Error generating random bytes: %v", err)
+		return "", fmt.Errorf("failed to generate random token")
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+func getJWTSecret() string {
+	secret := "your_default_secret_here" // Replace with env variable in production
+	// In production, use:
+	// secret := os.Getenv("JWT_SECRET")
+	// if secret == "" {
+	//     log.Fatal("JWT_SECRET environment variable not set")
+	// }
+	return secret
+}
+
+func ValidateTokenAndFetchEmail(configPath, token string, c *gin.Context) (bool, string, error) {
+	claims, err := ParseJWTToken(token)
+	if err != nil {
+		return false, "", err
+	}
+	return true, claims.Email, nil
+}
+
+func GenerateSecretHash(username, clientID, clientSecret string) string {
+	key := []byte(clientSecret)
+	message := username + clientID
+
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(message))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
 }

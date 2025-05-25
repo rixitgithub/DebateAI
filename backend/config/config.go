@@ -30,6 +30,19 @@ type Config struct {
 	Database struct {
 		URI string `yaml:"uri"`
 	} `yaml:"database"`
+
+	JWT struct {
+		Secret string // Add JWT secret
+		Expiry int    // Token expiry in minutes
+	}
+	SMTP struct { // Add SMTP configuration
+		Host        string
+		Port        int
+		Username    string // Gmail address
+		Password    string // App Password
+		SenderEmail string // Same as Username for Gmail
+		SenderName  string
+	}
 }
 
 // LoadConfig reads the configuration file
