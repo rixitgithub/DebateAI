@@ -43,6 +43,9 @@ type Config struct {
 		SenderEmail string // Same as Username for Gmail
 		SenderName  string
 	}
+	GoogleOAuth struct { // Add Google OAuth configuration
+		ClientID string
+	}
 }
 
 // LoadConfig reads the configuration file

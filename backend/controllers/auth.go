@@ -20,7 +20,87 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
+	"google.golang.org/api/idtoken"
 )
+
+type GoogleLoginRequest struct {
+	IDToken string `json:"idToken" binding:"required"`
+}
+
+func GoogleLogin(ctx *gin.Context) {
+	cfg := loadConfig(ctx)
+	if cfg == nil {
+		return
+	}
+
+	var request GoogleLoginRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(400, gin.H{"error": "Invalid input", "message": err.Error()})
+		return
+	}
+
+	// Verify Google ID token
+	payload, err := idtoken.Validate(ctx, request.IDToken, cfg.GoogleOAuth.ClientID)
+	if err != nil {
+		log.Printf("Google ID token validation failed: %v", err)
+		ctx.JSON(401, gin.H{"error": "Invalid Google ID token", "message": err.Error()})
+		return
+	}
+
+	// Extract email and name from Google token
+	email, ok := payload.Claims["email"].(string)
+	if !ok || email == "" {
+		ctx.JSON(400, gin.H{"error": "Email not found in Google token"})
+		return
+	}
+	nickname, _ := payload.Claims["name"].(string)
+	if nickname == "" {
+		nickname = utils.ExtractNameFromEmail(email)
+	}
+
+	// Check if user exists in MongoDB
+	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var existingUser models.User
+	err = db.MongoDatabase.Collection("users").FindOne(dbCtx, bson.M{"email": email}).Decode(&existingUser)
+	if err != nil && err != mongo.ErrNoDocuments {
+		log.Printf("Database error: %v", err)
+		ctx.JSON(500, gin.H{"error": "Database error", "message": err.Error()})
+		return
+	}
+
+	if err == mongo.ErrNoDocuments {
+		// Create new user
+		newUser := models.User{
+			Email:      email,
+			Password:   "", // No password for Google users
+			Nickname:   nickname,
+			EloRating:  1200,
+			IsVerified: true, // Google-verified emails are trusted
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		}
+		_, err = db.MongoDatabase.Collection("users").InsertOne(dbCtx, newUser)
+		if err != nil {
+			log.Printf("User insertion error: %v", err)
+			ctx.JSON(500, gin.H{"error": "Failed to create user", "message": err.Error()})
+			return
+		}
+	}
+
+	// Generate JWT
+	token, err := generateJWT(email, cfg.JWT.Secret, cfg.JWT.Expiry)
+	if err != nil {
+		log.Printf("Token generation error: %v", err)
+		ctx.JSON(500, gin.H{"error": "Failed to generate token", "message": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message":     "Google login successful",
+		"accessToken": token,
+	})
+}
 
 func SignUp(ctx *gin.Context) {
 	cfg := loadConfig(ctx)

@@ -27,3 +27,6 @@ smtp:
   password: # SMTP app password (not your regular email password)
   senderEmail: # Email address used to send emails
   senderName: # Display name for the sender in outgoing emails
+
+googleOAuth:
+  clientID: # Google OAuth Client ID

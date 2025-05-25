@@ -69,11 +69,10 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	router.POST("/signup", routes.SignUpRouteHandler)
 	router.POST("/verifyEmail", routes.VerifyEmailRouteHandler)
 	router.POST("/login", routes.LoginRouteHandler)
+	router.POST("/googleLogin", routes.GoogleLoginRouteHandler)
 	router.POST("/forgotPassword", routes.ForgotPasswordRouteHandler)
 	router.POST("/confirmForgotPassword", routes.VerifyForgotPasswordRouteHandler)
 	router.POST("/verifyToken", routes.VerifyTokenRouteHandler)
-
-	
 
 	// Protected routes (JWT auth)
 	auth := router.Group("/")
@@ -99,9 +98,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 
 		auth.GET("/chat/:roomId", websocket.RoomChatHandler)
 
-
 		auth.GET("/coach/pros-cons/topic", routes.GetProsConsTopic)
-        auth.POST("/coach/pros-cons/submit", routes.SubmitProsCons)
+		auth.POST("/coach/pros-cons/submit", routes.SubmitProsCons)
 	}
 
 	return router

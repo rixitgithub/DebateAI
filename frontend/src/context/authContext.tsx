@@ -15,6 +15,7 @@ interface AuthContextType {
   verifyEmail: (email: string, code: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>;
+  googleLogin: (idToken: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,7 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     console.log(storedToken);
     try {
       const response = await fetch(`${baseURL}/verifyToken`, {
-        method: "POST", // <-- Make sure this matches your backend route
+        method: "POST",
         headers: { Authorization: `Bearer ${storedToken}` },
       });
   
@@ -52,7 +53,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     verifyToken();
   }, [verifyToken]);
-  
 
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -156,6 +156,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const googleLogin = async (idToken: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${baseURL}/googleLogin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Google login failed");
+
+      setToken(data.accessToken);
+      localStorage.setItem("token", data.accessToken);
+      navigate("/");
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = () => {
     setToken(null);
     localStorage.removeItem("token");
@@ -176,6 +198,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         verifyEmail,
         forgotPassword,
         confirmForgotPassword,
+        googleLogin,
       }}
     >
       {children}

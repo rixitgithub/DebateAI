@@ -6,6 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func GoogleLoginRouteHandler(c *gin.Context) {
+	controllers.GoogleLogin(c)
+}
+
 func SignUpRouteHandler(c *gin.Context) {
 	controllers.SignUp(c)
 }
