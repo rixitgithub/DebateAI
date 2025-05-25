@@ -6,7 +6,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// User defines a user entity
 type User struct {
 	ID                primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Email             string             `bson:"email" json:"email"`
@@ -21,4 +20,7 @@ type User struct {
 	ResetPasswordCode string             `bson:"resetPasswordCode,omitempty"`
 	CreatedAt         time.Time          `bson:"createdAt"`
 	UpdatedAt         time.Time          `bson:"updatedAt"`
+
+	Debates       []primitive.ObjectID `bson:"debates,omitempty" json:"debates,omitempty"`
+	RatingHistory []primitive.ObjectID `bson:"ratingHistory,omitempty" json:"ratingHistory,omitempty"`
 }
