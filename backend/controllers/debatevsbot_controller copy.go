@@ -65,7 +65,7 @@ func CreateDebate(c *gin.Context) {
 
 	token = strings.TrimPrefix(token, "Bearer ")
 	// Validate token and get user email
-	valid, userEmail, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
+	valid, email, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
 	if err != nil || !valid {
 		c.JSON(401, gin.H{"error": "Invalid or expired token"})
 		return
@@ -88,7 +88,7 @@ func CreateDebate(c *gin.Context) {
 	}
 
 	debate := models.DebateVsBot{
-		UserEmail:    userEmail,
+		Email:        email,
 		BotName:      req.BotName,
 		BotLevel:     req.BotLevel,
 		Topic:        req.Topic,
@@ -123,7 +123,7 @@ func SendDebateMessage(c *gin.Context) {
 	}
 
 	token = strings.TrimPrefix(token, "Bearer ")
-	valid, userEmail, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
+	valid, email, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
 	if err != nil || !valid {
 		c.JSON(401, gin.H{"error": "Invalid or expired token"})
 		return
@@ -146,7 +146,7 @@ func SendDebateMessage(c *gin.Context) {
 	})
 
 	debate := models.DebateVsBot{
-		UserEmail: userEmail,
+		Email:     email,
 		BotName:   req.BotName,
 		BotLevel:  req.BotLevel,
 		Topic:     req.Topic,
@@ -182,7 +182,7 @@ func JudgeDebate(c *gin.Context) {
 	}
 
 	token = strings.TrimPrefix(token, "Bearer ")
-	valid, userEmail, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
+	valid, email, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
 	if err != nil || !valid {
 		c.JSON(401, gin.H{"error": "Invalid or expired token"})
 		return
@@ -198,7 +198,7 @@ func JudgeDebate(c *gin.Context) {
 	result := services.JudgeDebate(req.History)
 
 	// Update debate outcome
-	if err := db.UpdateDebateVsBotOutcome(userEmail, result); err != nil {
+	if err := db.UpdateDebateVsBotOutcome(email, result); err != nil {
 		log.Printf("Failed to update debate outcome: %v", err)
 	}
 

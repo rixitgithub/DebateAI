@@ -1,4 +1,3 @@
-// src/components/Profile.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -21,6 +20,9 @@ import {
   MinusCircle,
   Medal,
   Twitter,
+  Users,
+  TrendingUp,
+  Award,
 } from "lucide-react";
 import {
   PieChart,
@@ -72,7 +74,7 @@ interface StatData {
 interface DashboardData {
   profile: ProfileData;
   leaderboard: LeaderboardEntry[];
-  debateHistory: DebateResult[];
+  debateHistory: DebateResult[] | null;
   stats: StatData;
 }
 
@@ -130,11 +132,20 @@ const Profile: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="p-4">Loading Profile...</div>;
+    return (
+      <div className="p-4 flex justify-center items-center h-[calc(100vh-8rem)]">
+        <div className="text-center">
+          <div className="animate-pulse rounded-full bg-muted h-12 w-12 mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading Profile...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!dashboard) {
-    return <div className="p-4 text-red-500">{errorMessage}</div>;
+    return (
+      <div className="p-4 text-red-500 text-center">{errorMessage}</div>
+    );
   }
 
   const { profile, leaderboard, debateHistory, stats } = dashboard;
@@ -165,12 +176,12 @@ const Profile: React.FC = () => {
       {/* Left Column: Profile Details */}
       <div className="flex flex-col w-full md:w-[20%] bg-card p-4 border border-border rounded-md shadow md:h-[calc(100vh-8rem)] overflow-auto">
         {successMessage && (
-          <div className="mb-2 p-2 rounded bg-green-100 text-green-700 text-sm">
+          <div className="mb-2 p-2 rounded bg-green-100 text-green-700 text-sm animate-in fade-in duration-300">
             {successMessage}
           </div>
         )}
         {errorMessage && (
-          <div className="mb-2 p-2 rounded bg-red-100 text-red-700 text-sm">
+          <div className="mb-2 p-2 rounded bg-red-100 text-red-700 text-sm animate-in fade-in duration-300">
             {errorMessage}
           </div>
         )}
@@ -183,7 +194,7 @@ const Profile: React.FC = () => {
             />
           </div>
           <h2 className="text-2xl font-bold text-foreground">
-            {profile.displayName}
+            {profile.displayName || "Set a Display Name"}
           </h2>
           <p className="text-lg text-muted-foreground">
             Elo: {profile.eloRating}
@@ -206,13 +217,13 @@ const Profile: React.FC = () => {
         {!isEditing ? (
           <>
             <p className="text-sm text-foreground mb-4 whitespace-pre-wrap">
-              {profile.bio}
+              {profile.bio || "Add a bio to share your story!"}
             </p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsEditing(true)}
-              className="w-full"
+              className="w-full hover:bg-primary hover:text-primary-foreground transition-colors"
             >
               Edit Profile
             </Button>
@@ -276,54 +287,71 @@ const Profile: React.FC = () => {
           {/* Donut Chart */}
           <Card className="shadow h-[275px]">
             <CardContent className="flex-1 pb-0">
-              <ChartContainer
-                config={donutChartConfig}
-                className="mx-auto aspect-square max-h-[240px]"
-              >
-                <PieChart>
-                  <ChartTooltip
-                    cursor={false}
-                    content={<ChartTooltipContent hideLabel />}
-                  />
-                  <Pie
-                    data={donutChartData}
-                    dataKey="value"
-                    nameKey="label"
-                    innerRadius={50}
-                    strokeWidth={3}
+              {totalMatches === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[240px] text-center">
+                  <Award className="w-12 h-12 text-muted-foreground mb-2 animate-pulse" />
+                  <p className="text-sm text-muted-foreground mb-2">
+                    No matches yet!
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => (window.location.href = "/debates")}
+                    className="hover:bg-primary hover:text-primary-foreground"
                   >
-                    <LabelList
-                      content={({ viewBox }) => {
-                        if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                          return (
-                            <text
-                              x={viewBox.cx}
-                              y={viewBox.cy}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                            >
-                              <tspan
+                    Start Debating
+                  </Button>
+                </div>
+              ) : (
+                <ChartContainer
+                  config={donutChartConfig}
+                  className="mx-auto aspect-square max-h-[240px]"
+                >
+                  <PieChart>
+                    <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent hideLabel />}
+                    />
+                    <Pie
+                      data={donutChartData}
+                      dataKey="value"
+                      nameKey="label"
+                      innerRadius={50}
+                      strokeWidth={3}
+                    >
+                      <LabelList
+                        content={({ viewBox }) => {
+                          if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                            return (
+                              <text
                                 x={viewBox.cx}
                                 y={viewBox.cy}
-                                className="fill-foreground text-xl font-bold"
+                                textAnchor="middle"
+                                dominantBaseline="middle"
                               >
-                                {totalMatches}
-                              </tspan>
-                              <tspan
-                                x={viewBox.cx}
-                                y={(viewBox.cy || 0) + 18}
-                                className="fill-muted-foreground text-sm"
-                              >
-                                Matches
-                              </tspan>
-                            </text>
-                          );
-                        }
-                      }}
-                    />
-                  </Pie>
-                </PieChart>
-              </ChartContainer>
+                                <tspan
+                                  x={viewBox.cx}
+                                  y={viewBox.cy}
+                                  className="fill-foreground text-xl font-bold"
+                                >
+                                  {totalMatches}
+                                </tspan>
+                                <tspan
+                                  x={viewBox.cx}
+                                  y={(viewBox.cy || 0) + 18}
+                                  className="fill-muted-foreground text-sm"
+                                >
+                                  Matches
+                                </tspan>
+                              </text>
+                            );
+                          }
+                        }}
+                      />
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -333,37 +361,54 @@ const Profile: React.FC = () => {
               <CardTitle className="text-foreground text-lg">Ratings</CardTitle>
             </CardHeader>
             <CardContent className="p-0 flex-1 flex items-center justify-center">
-              <ChartContainer
-                config={eloChartConfig}
-                className="w-[90%] h-[80%]"
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={stats.eloHistory}
-                    margin={{ top: 58, right: 12, left: 12, bottom: 8 }}
-                  >
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent hideLabel />}
-                    />
-                    <Line
-                      dataKey="elo"
-                      type="monotone"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(var(--primary))" }}
-                      activeDot={{ r: 6 }}
+              {stats.eloHistory && stats.eloHistory.length > 0 ? (
+                <ChartContainer
+                  config={eloChartConfig}
+                  className="w-[90%] h-[80%]"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={stats.eloHistory}
+                      margin={{ top: 58, right: 12, left: 12, bottom: 8 }}
                     >
-                      <LabelList
-                        dataKey="elo"
-                        position="top"
-                        offset={6}
-                        className="fill-foreground text-xs"
+                      <ChartTooltip
+                        cursor={false}
+                        content={<ChartTooltipContent hideLabel />}
                       />
-                    </Line>
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartContainer>
+                      <Line
+                        dataKey="elo"
+                        type="monotone"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        dot={{ fill: "hsl(var(--primary))" }}
+                        activeDot={{ r: 6 }}
+                      >
+                        <LabelList
+                          dataKey="elo"
+                          position="top"
+                          offset={6}
+                          className="fill-foreground text-xs"
+                        />
+                      </Line>
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <TrendingUp className="w-12 h-12 text-muted-foreground mb-2 animate-pulse" />
+                  <p className="text-sm text-muted-foreground mb-2">
+                    No Elo history yet!
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => (window.location.href = "/debates")}
+                    className="hover:bg-primary hover:text-primary-foreground"
+                  >
+                    Join a Debate
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -382,36 +427,48 @@ const Profile: React.FC = () => {
             </CardHeader>
             <Separator />
             <CardContent className="p-2 overflow-auto">
-              <ul className="space-y-1">
-                {leaderboard.slice(0, 5).map((leader, index) => (
-                  <li
-                    key={index}
-                    className="flex items-center justify-between border-b border-muted py-1 last:border-none text-sm"
-                  >
-                    <span className="font-medium flex items-center space-x-2">
-                      <span>{leader.rank}</span>
-                      {leader.rank === 1 && (
-                        <Medal className="w-3 h-3 text-yellow-500" />
-                      )}
-                      {leader.rank === 2 && (
-                        <Medal className="w-3 h-3 text-gray-400" />
-                      )}
-                      {leader.rank === 3 && (
-                        <Medal className="w-3 h-3 text-amber-600" />
-                      )}
-                      <img
-                        src={leader.avatarUrl}
-                        alt={leader.name}
-                        className="w-6 h-6 rounded-full"
-                      />
-                      <span>{leader.name}</span>
-                    </span>
-                    <span className="text-muted-foreground text-xs">
-                      {leader.score}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              {leaderboard && leaderboard.length > 0 ? (
+                <ul className="space-y-1">
+                  {leaderboard.slice(0, 5).map((leader, index) => (
+                    <li
+                      key={index}
+                      className="flex items-center justify-between border-b border-muted py-1 last:border-none text-sm hover:bg-muted/50 transition-colors"
+                    >
+                      <span className="font-medium flex items-center space-x-2">
+                        <span>{leader.rank}</span>
+                        {leader.rank === 1 && (
+                          <Medal className="w-3 h-3 text-yellow-500" />
+                        )}
+                        {leader.rank === 2 && (
+                          <Medal className="w-3 h-3 text-gray-400" />
+                        )}
+                        {leader.rank === 3 && (
+                          <Medal className="w-3 h-3 text-amber-600" />
+                        )}
+                        <img
+                          src={leader.avatarUrl}
+                          alt={leader.name}
+                          className="w-6 h-6 rounded-full"
+                        />
+                        <span>{leader.name}</span>
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {leader.score}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <Users className="w-12 h-12 text-muted-foreground mb-2 animate-pulse" />
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Leaderboard is empty!
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Check back later to see top debaters.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -427,40 +484,57 @@ const Profile: React.FC = () => {
             </CardHeader>
             <Separator />
             <CardContent className="p-2 overflow-auto">
-              <ul className="space-y-1">
-                {debateHistory.map((debate, idx) => {
-                  const IconComponent =
-                    debate.result === "win"
-                      ? CheckCircle
-                      : debate.result === "loss"
-                      ? XCircle
-                      : MinusCircle;
-                  const iconColor =
-                    debate.result === "win"
-                      ? "text-green-600"
-                      : debate.result === "loss"
-                      ? "text-red-600"
-                      : "text-gray-600";
-                  return (
-                    <li
-                      key={idx}
-                      className="flex items-center justify-between border-b border-muted py-1 last:border-none text-sm"
-                    >
-                      <span className="font-medium flex items-center">
-                        <IconComponent
-                          className={`w-3 h-3 mr-1 ${iconColor}`}
-                        />
-                        {debate.topic}
-                      </span>
-                      <span className={`${iconColor} font-semibold text-xs`}>
-                        {debate.result.toUpperCase()}{" "}
-                        {debate.eloChange > 0 && `(+${debate.eloChange})`}
-                        {debate.eloChange < 0 && `(${debate.eloChange})`}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+              {debateHistory && debateHistory.length > 0 ? (
+                <ul className="space-y-1">
+                  {debateHistory.map((debate, idx) => {
+                    const IconComponent =
+                      debate.result === "win"
+                        ? CheckCircle
+                        : debate.result === "loss"
+                        ? XCircle
+                        : MinusCircle;
+                    const iconColor =
+                      debate.result === "win"
+                        ? "text-green-600"
+                        : debate.result === "loss"
+                        ? "text-red-600"
+                        : "text-gray-600";
+                    return (
+                      <li
+                        key={idx}
+                        className="flex items-center justify-between border-b border-muted py-1 last:border-none text-sm hover:bg-muted/50 transition-colors"
+                      >
+                        <span className="font-medium flex items-center">
+                          <IconComponent
+                            className={`w-3 h-3 mr-1 ${iconColor}`}
+                          />
+                          {debate.topic}
+                        </span>
+                        <span className={`${iconColor} font-semibold text-xs`}>
+                          {debate.result.toUpperCase()}{" "}
+                          {debate.eloChange > 0 && `(+${debate.eloChange})`}
+                          {debate.eloChange < 0 && `(${debate.eloChange})`}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <Award className="w-12 h-12 text-muted-foreground mb-2 animate-pulse" />
+                  <p className="text-sm text-muted-foreground mb-2">
+                    No recent debates available.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => (window.location.href = "/debates")}
+                    className="hover:bg-primary hover:text-primary-foreground"
+                  >
+                    Join a Debate
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

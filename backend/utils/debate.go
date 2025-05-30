@@ -24,35 +24,35 @@ func SeedDebateData() {
 	// Define sample debates
 	sampleDebates := []models.Debate{
 		{
-			UserEmail: "irishittiwari@gmail.com",
+			Email:     "irishittiwari@gmail.com",
 			Topic:     "Global Warming",
 			Result:    "win",
 			EloChange: 12,
 			Date:      time.Now().Add(-time.Hour * 24 * 30),
 		},
 		{
-			UserEmail: "irishittiwari@gmail.com",
+			Email:     "irishittiwari@gmail.com",
 			Topic:     "Universal Healthcare",
 			Result:    "loss",
 			EloChange: -5,
 			Date:      time.Now().Add(-time.Hour * 24 * 20),
 		},
 		{
-			UserEmail: "irishittiwari@gmail.com",
+			Email:     "irishittiwari@gmail.com",
 			Topic:     "Social Media Regulation",
 			Result:    "draw",
 			EloChange: 0,
 			Date:      time.Now().Add(-time.Hour * 24 * 10),
 		},
 		{
-			UserEmail: "irishittiwari@gmail.com",
+			Email:     "irishittiwari@gmail.com",
 			Topic:     "Renewable Energy",
 			Result:    "win",
 			EloChange: 10,
 			Date:      time.Now().Add(-time.Hour * 24 * 5),
 		},
 		{
-			UserEmail: "irishittiwari@gmail.com",
+			Email:     "irishittiwari@gmail.com",
 			Topic:     "Space Exploration",
 			Result:    "loss",
 			EloChange: -7,

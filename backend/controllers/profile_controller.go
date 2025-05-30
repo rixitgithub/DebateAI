@@ -38,8 +38,9 @@ func pow(base, exponent float64) float64 {
 
 // GetProfile retrieves and returns user profile data
 func GetProfile(ctx *gin.Context) {
-	userEmail := ctx.GetString("userEmail")
-	if userEmail == "" {
+	email := ctx.GetString("email")
+
+	if email == "" {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
@@ -49,7 +50,7 @@ func GetProfile(ctx *gin.Context) {
 
 	// Fetch user profile
 	var user models.User
-	err := db.MongoDatabase.Collection("users").FindOne(dbCtx, bson.M{"email": userEmail}).Decode(&user)
+	err := db.MongoDatabase.Collection("users").FindOne(dbCtx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
@@ -64,7 +65,7 @@ func GetProfile(ctx *gin.Context) {
 	if profileAvatarURL == "" {
 		profileName := user.DisplayName
 		if profileName == "" {
-			profileName = extractNameFromEmail(userEmail)
+			profileName = extractNameFromEmail(email)
 		}
 		profileAvatarURL = "https://api.dicebear.com/9.x/adventurer/svg?seed=" + profileName
 	}
@@ -106,14 +107,14 @@ func GetProfile(ctx *gin.Context) {
 			Score       int    `json:"score"`
 			AvatarUrl   string `json:"avatarUrl"`
 			CurrentUser bool   `json:"currentUser"`
-		}{rank, lbUser.DisplayName, lbUser.EloRating, lbAvatarURL, lbUser.Email == userEmail})
+		}{rank, lbUser.DisplayName, lbUser.EloRating, lbAvatarURL, lbUser.Email == email})
 		rank++
 	}
 
 	// Fetch debate history
 	debateCursor, err := db.MongoDatabase.Collection("debates").Find(
 		dbCtx,
-		bson.M{"userEmail": userEmail},
+		bson.M{"email": email},
 		options.Find().SetSort(bson.M{"date": -1}).SetLimit(5),
 	)
 	if err != nil {
@@ -135,7 +136,7 @@ func GetProfile(ctx *gin.Context) {
 
 	// Aggregate stats (wins, losses, draws)
 	pipeline := mongo.Pipeline{
-		bson.D{{"$match", bson.M{"userEmail": userEmail}}},
+		bson.D{{"$match", bson.M{"email": email}}},
 		bson.D{{"$group", bson.M{
 			"_id":    nil,
 			"wins":   bson.M{"$sum": bson.M{"$cond": bson.M{"if": bson.M{"$eq": []string{"$result", "win"}}, "then": 1, "else": 0}}},
@@ -162,7 +163,7 @@ func GetProfile(ctx *gin.Context) {
 	// Build Elo history
 	eloCursor, err := db.MongoDatabase.Collection("debates").Find(
 		dbCtx,
-		bson.M{"userEmail": userEmail},
+		bson.M{"email": email},
 		options.Find().SetSort(bson.M{"date": 1}),
 	)
 	if err != nil {
@@ -216,8 +217,8 @@ func GetProfile(ctx *gin.Context) {
 
 // UpdateProfile modifies user display name and bio
 func UpdateProfile(ctx *gin.Context) {
-	userEmail := ctx.GetString("userEmail")
-	if userEmail == "" {
+	email := ctx.GetString("email")
+	if email == "" {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "message": "Missing user email in context"})
 		return
 	}
@@ -234,7 +235,7 @@ func UpdateProfile(ctx *gin.Context) {
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	filter := bson.M{"email": userEmail}
+	filter := bson.M{"email": email}
 	update := bson.M{"$set": bson.M{
 		"displayName": updateData.DisplayName,
 		"bio":         updateData.Bio,
@@ -314,14 +315,14 @@ func UpdateEloAfterDebate(ctx *gin.Context) {
 	// Record debate results
 	now := time.Now()
 	winnerDebate := models.Debate{
-		UserEmail: winner.Email,
+		Email:     winner.Email,
 		Topic:     req.Topic,
 		Result:    "win",
 		EloChange: winnerEloChange,
 		Date:      now,
 	}
 	loserDebate := models.Debate{
-		UserEmail: loser.Email,
+		Email:     loser.Email,
 		Topic:     req.Topic,
 		Result:    "loss",
 		EloChange: loserEloChange,

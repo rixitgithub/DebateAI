@@ -40,7 +40,7 @@ type Stat struct {
 // GetLeaderboard fetches and returns leaderboard data
 func GetLeaderboard(c *gin.Context) {
 	// Check for authenticated user
-	currentUserEmail, exists := c.Get("userEmail")
+	currentemail, exists := c.Get("email")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
@@ -78,7 +78,7 @@ func GetLeaderboard(c *gin.Context) {
 			avatarURL = "https://api.dicebear.com/9.x/adventurer/svg?seed=" + name
 		}
 
-		isCurrentUser := user.Email == currentUserEmail
+		isCurrentUser := user.Email == currentemail
 		debaters = append(debaters, Debater{
 			ID:          user.ID.Hex(),
 			Rank:        i + 1,

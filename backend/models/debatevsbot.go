@@ -19,7 +19,7 @@ type PhaseTiming struct {
 // DebateVsBot represents a debate session against a bot
 type DebateVsBot struct {
 	ID           primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	UserEmail    string             `json:"userEmail" bson:"userEmail"`
+	Email        string             `json:"email" bson:"email"`
 	BotName      string             `json:"botName" bson:"botName"`
 	BotLevel     string             `json:"botLevel" bson:"botLevel"`
 	Topic        string             `json:"topic" bson:"topic"`

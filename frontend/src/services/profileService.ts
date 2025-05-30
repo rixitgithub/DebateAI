@@ -1,6 +1,7 @@
 const baseURL = import.meta.env.VITE_BASE_URL;
 
 export const getProfile = async (token: string) => {
+  
   const response = await fetch(`${baseURL}/user/fetchprofile`, {
     method: "GET",
     headers: {

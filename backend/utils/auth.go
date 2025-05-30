@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"time"
 
@@ -115,12 +116,11 @@ func GenerateRandomToken(length int) (string, error) {
 }
 
 func getJWTSecret() string {
-	secret := "your_default_secret_here" // Replace with env variable in production
-	// In production, use:
-	// secret := os.Getenv("JWT_SECRET")
-	// if secret == "" {
-	//     log.Fatal("JWT_SECRET environment variable not set")
-	// }
+
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		log.Fatal("JWT_SECRET environment variable not set")
+	}
 	return secret
 }
 

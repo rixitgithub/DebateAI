@@ -49,7 +49,7 @@ func CreateRoomHandler(c *gin.Context) {
 	}
 
 	// Get user email from middleware-set context
-	userEmail, exists := c.Get("userEmail")
+	email, exists := c.Get("email")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user email not found"})
 		return
@@ -67,7 +67,7 @@ func CreateRoomHandler(c *gin.Context) {
 		EloRating   int    `bson:"eloRating"`
 	}
 
-	err := userCollection.FindOne(ctx, bson.M{"email": userEmail}).Decode(&user)
+	err := userCollection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
@@ -96,7 +96,6 @@ func CreateRoomHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, newRoom)
 }
-
 
 // GetRoomsHandler handles GET /rooms and returns all rooms.
 func GetRoomsHandler(c *gin.Context) {
