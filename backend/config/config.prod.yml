@@ -2,11 +2,31 @@ server:
   port: 1313
 
 cognito:
-  appClientId: 
-  appClientSecret: 
-  userPoolId:
-  region:
+  appClientId: 5gf3bjkv4bds4vt40ugao8reh9
+  appClientSecret: 1ov0honupgd4d7uv6tsev7d2deeklj137tbhqba5gnge92r7onk
+  userPoolId: eu-north-1_aX36eUUur
+  region: eu-north-1
 
 openai:
-  gptApiKey: 
+  gptApiKey: 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
   
+database:
+  uri: "mongodb+srv://rishit:rishittiwariy@cluster0.avk5j.mongodb.net/DebateAI"
+
+gemini:
+  apiKey: AIzaSyCYk5pn8ZR3NQcJpTqJ15tv5fULhzD05Bo
+
+jwt:
+  secret: "sfgofngoidoidvfvjfgiojdoigjdfoigjodifjgodig" 
+  expiry: 1440
+
+smtp:
+  host: "smtp.gmail.com"
+  port: 587
+  username: "irishittiwari@gmail.com" 
+  password: "vqvs orcs ryui hced" 
+  senderEmail: "irishittiwari@gmail.com"
+  senderName: "ArgueHub Team"
+  
+googleOAuth:
+  clientID: "332067296907-c9t5pkd6u826075ihoeiehoiavj6m9u5.apps.googleusercontent.com"
