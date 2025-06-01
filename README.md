@@ -123,12 +123,70 @@ googleOAuth:
    ```
    npm run dev
    ```
+---
+
+##  Contribution Guidelines
+
+Thank you for your interest in contributing to **DebateAI**! We appreciate your efforts in making this project better. Please follow these best practices to ensure smooth collaboration.
+
+###  How to Contribute
+
+#### 1. Fork the Repository
+- Navigate to the [DebateAI repository](https://github.com/AOSSIE-Org/DebateAI).
+- Click the **Fork** button in the top right corner.
+- Clone the forked repository to your local machine:
+```sh
+git clone https://github.com/your-username/DebateAI.git
+cd DebateAI
+```
+
+#### 2. Create a Feature Branch
+- Always create a new branch for your contributions:
+```sh
+git checkout -b feature-name
+```
+
+#### 3. Make Changes and Commit
+- Follow coding best practices and maintain code consistency.
+- Write clear commit messages:
+```sh
+git commit -m "Added [feature/fix]: Short description"
+```
+
+#### 4. Push Changes and Open a Pull Request
+- Push your changes to your forked repository:
+```sh
+git push origin feature-name
+```
+- Navigate to the original repository and open a **Pull Request (PR)**.
+- Provide a detailed description of the changes in the PR.
 
 ---
 
-##  Contributing
+###  Best Practices
 
-Want to contribute to DebateAI? Reach out to [Bhavik Mangla](https://github.com/bhavik-mangla) and [Rishit Tiwari](https://github.com/rixitgithub). Contributions that enhance accessibility, features, or performance are always welcome.
+- **Code Quality**: Ensure your code is clean, readable, and consistent with the existing codebase.
+- **Testing**: Test your changes locally before submitting a PR.
+- **Security**: Never commit sensitive information (e.g., API keys or passwords).
+- **Communication**: Be responsive to reviews and update your PRs as requested.
+
+---
+
+###  Submitting a Video Demonstration
+
+To help maintainers understand your changes, consider submitting a short video showcasing the feature or fix:
+- Record a short demo (you can use tools like Loom or OBS).
+- Upload and include the video link in your Pull Request description.
+
+---
+
+###  Reporting Issues
+
+If you find a bug or have a feature request:
+- Open an issue [here](https://github.com/AOSSIE-Org/DebateAI/issues).
+- Clearly describe the problem and, if possible, suggest solutions.
+
+We look forward to your contributions! 
 
 ---
 
