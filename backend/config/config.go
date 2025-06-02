@@ -32,9 +32,10 @@ type Config struct {
 	} `yaml:"database"`
 
 	JWT struct {
-		Secret string // Add JWT secret
-		Expiry int    // Token expiry in minutes
+		Secret string `yaml:"secret"`
+		Expiry int    `yaml:"expiry"`
 	}
+
 	SMTP struct { // Add SMTP configuration
 		Host        string
 		Port        int
