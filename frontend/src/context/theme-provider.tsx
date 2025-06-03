@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-enum ThemeOptions {
+export enum ThemeOptions {
     Light,
     Dark,
     Contrast
@@ -55,7 +55,7 @@ export function ThemeProvider({ children }: { children: any }): any {
 
     useEffect(() => {
     const bodyElement = document.body;
-    bodyElement.classList.remove("light", "dark", "contrast");
+    bodyElement.classList.remove("dark", "contrast");
     const className = ThemeOptions[theme].toLowerCase(); // "light", "dark", or "contrast"
     bodyElement.classList.add(className);
     localStorage.setItem("Theme", String(theme));

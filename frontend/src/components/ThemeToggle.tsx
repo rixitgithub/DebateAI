@@ -1,5 +1,5 @@
 import { useContext, useState, useRef, useEffect } from "react";
-import { ThemeContext } from "../context/theme-provider";
+import { ThemeContext, ThemeOptions } from "../context/theme-provider";
 import { Moon, Sun, Contrast } from "lucide-react";
 
 export function ThemeToggle() {
@@ -8,17 +8,18 @@ export function ThemeToggle() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const themeOptions = [
-    { id: 0, name: "Light", icon: <Sun size={16} /> },
-    { id: 1, name: "Dark", icon: <Moon size={16} /> },
-    { id: 2, name: "High Contrast", icon: <Contrast size={16} /> },
+    { id: ThemeOptions.Light, name: "Light", icon: <Sun size={16} /> },
+    { id: ThemeOptions.Dark, name: "Dark", icon: <Moon size={16} /> },
+    { id: ThemeOptions.Contrast, name: "High Contrast", icon: <Contrast size={16} /> },
   ];
 
-  const setTheme = (id: number) => {
-    localStorage.setItem("Theme", String(id));
-    window.location.reload();
+  const setTheme = (targetId: number) => {
+    const current = theme;
+    const totalThemes = Object.keys(ThemeOptions).length / 2;
+    const clicks = (targetId - current + totalThemes) % totalThemes;
+    for (let i = 0; i < clicks; i++) toggleTheme();
   };
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -35,7 +36,8 @@ export function ThemeToggle() {
         onClick={() => setOpen((prev) => !prev)}
         className="w-full flex items-center gap-2 p-2 text-sm font-medium rounded-md hover:bg-muted/70 transition"
       >
-        {themeOptions[theme].icon} Theme: <span>{themeOptions[theme].name}</span>
+        {themeOptions.find((t) => t.id === theme)?.icon} Theme:{" "}
+        <span>{themeOptions.find((t) => t.id === theme)?.name}</span>
         <svg
           className={`ml-auto w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"

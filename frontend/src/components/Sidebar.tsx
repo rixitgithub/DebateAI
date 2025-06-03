@@ -3,7 +3,7 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import { MessageSquare, BarChart, User, Info, Trophy } from "lucide-react";
 import debateAiLogo from "@/assets/aossie.png";
-import { ThemeToggle } from "./ThemeToogle";
+import { ThemeToggle } from "./ThemeToggle";
 
 function Sidebar() {
   return (
