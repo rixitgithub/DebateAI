@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"arguehub/db"
@@ -13,6 +14,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"fmt"
 )
 
 // calculateEloRating computes new Elo ratings after a match
@@ -36,12 +39,11 @@ func pow(base, exponent float64) float64 {
 	return result
 }
 
-// GetProfile retrieves and returns user profile data
-func GetProfile(ctx *gin.Context) {
-	email := ctx.GetString("email")
-
+// GetProfile retrieves and returns user profile data, leaderboard, debate history, and stats
+func GetProfile(c *gin.Context) {
+	email := c.GetString("email")
 	if email == "" {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "message": "Missing email in context"})
 		return
 	}
 
@@ -53,31 +55,37 @@ func GetProfile(ctx *gin.Context) {
 	err := db.MongoDatabase.Collection("users").FindOne(dbCtx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found", "message": "User not found"})
 		} else {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to fetch user: %v", err)})
 		}
 		return
 	}
 
 	// Set avatar URL with DiceBear fallback
 	profileAvatarURL := user.AvatarURL
+	profileName := user.DisplayName
 	if profileAvatarURL == "" {
-		profileName := user.DisplayName
 		if profileName == "" {
 			profileName = extractNameFromEmail(email)
 		}
 		profileAvatarURL = "https://api.dicebear.com/9.x/adventurer/svg?seed=" + profileName
 	}
 
+	// Use "Steve" as default displayName if empty (optional, comment out if not desired)
+	displayName := user.DisplayName
+	if displayName == "" {
+		displayName = "Steve"
+	}
+
 	// Fetch leaderboard
 	leaderboardCursor, err := db.MongoDatabase.Collection("users").Find(
 		dbCtx,
 		bson.M{},
-		options.Find().SetSort(bson.M{"eloRating": -1}).SetLimit(10),
+		options.Find().SetSort(bson.D{{"eloRating", -1}}).SetLimit(5), // Reduced to 5 to match frontend
 	)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching leaderboard"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to fetch leaderboard: %v", err)})
 		return
 	}
 	defer leaderboardCursor.Close(dbCtx)
@@ -92,14 +100,21 @@ func GetProfile(ctx *gin.Context) {
 	rank := 1
 	for leaderboardCursor.Next(dbCtx) {
 		var lbUser models.User
-		leaderboardCursor.Decode(&lbUser)
+		if err := leaderboardCursor.Decode(&lbUser); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to decode leaderboard user: %v", err)})
+			return
+		}
 		lbAvatarURL := lbUser.AvatarURL
+		lbName := lbUser.DisplayName
 		if lbAvatarURL == "" {
-			lbName := lbUser.DisplayName
 			if lbName == "" {
 				lbName = extractNameFromEmail(lbUser.Email)
 			}
 			lbAvatarURL = "https://api.dicebear.com/9.x/adventurer/svg?seed=" + lbName
+		}
+		// Use "Steve" as default for leaderboard name if empty
+		if lbName == "" {
+			lbName = "Steve"
 		}
 		leaderboard = append(leaderboard, struct {
 			Rank        int    `json:"rank"`
@@ -107,7 +122,7 @@ func GetProfile(ctx *gin.Context) {
 			Score       int    `json:"score"`
 			AvatarUrl   string `json:"avatarUrl"`
 			CurrentUser bool   `json:"currentUser"`
-		}{rank, lbUser.DisplayName, lbUser.EloRating, lbAvatarURL, lbUser.Email == email})
+		}{rank, lbName, lbUser.EloRating, lbAvatarURL, lbUser.Email == email})
 		rank++
 	}
 
@@ -115,38 +130,37 @@ func GetProfile(ctx *gin.Context) {
 	debateCursor, err := db.MongoDatabase.Collection("debates").Find(
 		dbCtx,
 		bson.M{"email": email},
-		options.Find().SetSort(bson.M{"date": -1}).SetLimit(5),
+		options.Find().SetSort(bson.D{{"date", -1}}).SetLimit(5),
 	)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching debate history"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to fetch debate history: %v", err)})
 		return
 	}
 	defer debateCursor.Close(dbCtx)
 
 	var debates []struct {
-		Topic     string    `bson:"topic" json:"topic"`
-		Result    string    `bson:"result" json:"result"`
-		EloChange int       `bson:"eloChange" json:"eloChange"`
-		Date      time.Time `bson:"date" json:"date"`
+		Topic     string `bson:"topic" json:"topic"`
+		Result    string `bson:"result" json:"result"`
+		EloChange int    `bson:"eloChange" json:"eloChange"`
 	}
 	if err := debateCursor.All(dbCtx, &debates); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding debate history"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to decode debate history: %v", err)})
 		return
 	}
 
 	// Aggregate stats (wins, losses, draws)
 	pipeline := mongo.Pipeline{
-		bson.D{{"$match", bson.M{"email": email}}},
-		bson.D{{"$group", bson.M{
+		{{"$match", bson.M{"email": email}}},
+		{{"$group", bson.M{
 			"_id":    nil,
-			"wins":   bson.M{"$sum": bson.M{"$cond": bson.M{"if": bson.M{"$eq": []string{"$result", "win"}}, "then": 1, "else": 0}}},
-			"losses": bson.M{"$sum": bson.M{"$cond": bson.M{"if": bson.M{"$eq": []string{"$result", "loss"}}, "then": 1, "else": 0}}},
-			"draws":  bson.M{"$sum": bson.M{"$cond": bson.M{"if": bson.M{"$eq": []string{"$result", "draw"}}, "then": 1, "else": 0}}},
+			"wins":   bson.M{"$sum": bson.M{"$cond": bson.M{"if": bson.M{"$eq": []interface{}{"$result", "win"}}, "then": 1, "else": 0}}},
+			"losses": bson.M{"$sum": bson.M{"$cond": bson.M{"if": bson.M{"$eq": []interface{}{"$result", "loss"}}, "then": 1, "else": 0}}},
+			"draws":  bson.M{"$sum": bson.M{"$cond": bson.M{"if": bson.M{"$eq": []interface{}{"$result", "draw"}}, "then": 1, "else": 0}}},
 		}}},
 	}
 	statsCursor, err := db.MongoDatabase.Collection("debates").Aggregate(dbCtx, pipeline)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error aggregating stats"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to aggregate stats: %v", err)})
 		return
 	}
 	defer statsCursor.Close(dbCtx)
@@ -157,17 +171,26 @@ func GetProfile(ctx *gin.Context) {
 		Draws  int `json:"draws"`
 	}
 	if statsCursor.Next(dbCtx) {
-		statsCursor.Decode(&stats)
+		if err := statsCursor.Decode(&stats); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to decode stats: %v", err)})
+			return
+		}
 	}
 
-	// Build Elo history
-	eloCursor, err := db.MongoDatabase.Collection("debates").Find(
-		dbCtx,
-		bson.M{"email": email},
-		options.Find().SetSort(bson.M{"date": 1}),
-	)
+	// Aggregate Elo history by month
+	eloPipeline := mongo.Pipeline{
+		{{"$match", bson.M{"email": email}}},
+		{{"$sort", bson.M{"date": 1}}},
+		{{"$group", bson.M{
+			"_id":           bson.M{"$dateToString": bson.M{"format": "%Y-%m", "date": "$date"}},
+			"lastEloChange": bson.M{"$last": "$eloChange"},
+			"lastDate":      bson.M{"$last": "$date"},
+		}}},
+		{{"$sort", bson.M{"lastDate": 1}}},
+	}
+	eloCursor, err := db.MongoDatabase.Collection("debates").Aggregate(dbCtx, eloPipeline)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching Elo history"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to aggregate Elo history: %v", err)})
 		return
 	}
 	defer eloCursor.Close(dbCtx)
@@ -178,17 +201,23 @@ func GetProfile(ctx *gin.Context) {
 	}
 	currentElo := user.EloRating
 	for eloCursor.Next(dbCtx) {
-		var debate struct {
-			Date      time.Time `bson:"date"`
-			EloChange int       `bson:"eloChange"`
+		var result struct {
+			ID            string    `bson:"_id"`
+			LastEloChange int       `bson:"lastEloChange"`
+			LastDate      time.Time `bson:"lastDate"`
 		}
-		eloCursor.Decode(&debate)
-		currentElo -= debate.EloChange
-		eloHistory = append([]struct {
+		if err := eloCursor.Decode(&result); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": fmt.Sprintf("Failed to decode Elo history: %v", err)})
+			return
+		}
+		currentElo -= result.LastEloChange
+		monthName := result.LastDate.Format("January")
+		eloHistory = append(eloHistory, struct {
 			Month string `json:"month"`
 			Elo   int    `json:"elo"`
-		}{{debate.Date.Format("January"), currentElo}}, eloHistory...)
+		}{monthName, currentElo})
 	}
+	// Add current Elo
 	eloHistory = append(eloHistory, struct {
 		Month string `json:"month"`
 		Elo   int    `json:"elo"`
@@ -197,10 +226,13 @@ func GetProfile(ctx *gin.Context) {
 	// Construct response
 	response := gin.H{
 		"profile": gin.H{
-			"displayName": user.DisplayName,
+			"displayName": displayName,
 			"email":       user.Email,
 			"bio":         user.Bio,
 			"eloRating":   user.EloRating,
+			"twitter":     user.Twitter,
+			"instagram":   user.Instagram,
+			"linkedin":    user.LinkedIn,
 			"avatarUrl":   profileAvatarURL,
 		},
 		"leaderboard":   leaderboard,
@@ -212,10 +244,9 @@ func GetProfile(ctx *gin.Context) {
 			"eloHistory": eloHistory,
 		},
 	}
-	ctx.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response)
 }
 
-// UpdateProfile modifies user display name and bio
 func UpdateProfile(ctx *gin.Context) {
 	email := ctx.GetString("email")
 	if email == "" {
@@ -226,23 +257,44 @@ func UpdateProfile(ctx *gin.Context) {
 	var updateData struct {
 		DisplayName string `json:"displayName"`
 		Bio         string `json:"bio"`
+		Twitter     string `json:"twitter"`
+		Instagram   string `json:"instagram"`
+		LinkedIn    string `json:"linkedin"`
 	}
 	if err := ctx.ShouldBindJSON(&updateData); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "message": err.Error()})
 		return
 	}
 
+	// Trim whitespace from input fields
+	updateData.DisplayName = strings.TrimSpace(updateData.DisplayName)
+	updateData.Bio = strings.TrimSpace(updateData.Bio)
+	updateData.Twitter = strings.TrimSpace(updateData.Twitter)
+	updateData.Instagram = strings.TrimSpace(updateData.Instagram)
+	updateData.LinkedIn = strings.TrimSpace(updateData.LinkedIn)
+
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	filter := bson.M{"email": email}
-	update := bson.M{"$set": bson.M{
-		"displayName": updateData.DisplayName,
-		"bio":         updateData.Bio,
-	}}
-	_, err := db.MongoDatabase.Collection("users").UpdateOne(dbCtx, filter, update)
+	update := bson.M{
+		"$set": bson.M{
+			"displayName": updateData.DisplayName,
+			"bio":         updateData.Bio,
+			"twitter":     updateData.Twitter,
+			"instagram":   updateData.Instagram,
+			"linkedin":    updateData.LinkedIn,
+			"updatedAt":   time.Now(),
+		},
+	}
+	result, err := db.MongoDatabase.Collection("users").UpdateOne(dbCtx, filter, update)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error", "message": "Failed to update profile"})
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "Not found", "message": "User not found"})
 		return
 	}
 

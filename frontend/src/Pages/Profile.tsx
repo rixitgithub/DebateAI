@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -23,6 +23,9 @@ import {
   Users,
   TrendingUp,
   Award,
+  Instagram,
+  Linkedin,
+  Pen,
 } from "lucide-react";
 import {
   PieChart,
@@ -47,6 +50,8 @@ interface ProfileData {
   bio: string;
   eloRating: number;
   twitter?: string;
+  instagram?: string;
+  linkedin?: string;
   avatarUrl?: string;
 }
 
@@ -80,10 +85,11 @@ interface DashboardData {
 
 const Profile: React.FC = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -108,7 +114,22 @@ const Profile: React.FC = () => {
     fetchDashboard();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (editingField === "displayName" && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [editingField]);
+
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
+  const handleSubmit = async (e: React.FormEvent, field: string) => {
     e.preventDefault();
     if (!dashboard?.profile) return;
     const token = getAuthToken();
@@ -120,15 +141,145 @@ const Profile: React.FC = () => {
       await updateProfile(
         token,
         dashboard.profile.displayName,
-        dashboard.profile.bio
+        dashboard.profile.bio,
+        dashboard.profile.twitter,
+        dashboard.profile.instagram,
+        dashboard.profile.linkedin
       );
-      setSuccessMessage("Profile updated successfully!");
+      setSuccessMessage(`${field.charAt(0).toUpperCase() + field.slice(1)} updated successfully!`);
       setErrorMessage("");
-      setIsEditing(false);
+      setEditingField(null);
     } catch (err) {
-      setErrorMessage("Failed to update profile.");
+      setErrorMessage(`Failed to update ${field}.`);
       console.error(err);
     }
+  };
+
+  const renderEditableSocialField = (
+    field: keyof ProfileData,
+    label: string,
+    Icon: React.ComponentType<{ className?: string }>,
+    placeholder: string = `Enter your ${label.toLowerCase()}`
+  ) => {
+    return editingField === field ? (
+      <form
+        onSubmit={(e) => handleSubmit(e, field as string)}
+        className="space-y-2 mb-2"
+      >
+        <div className="flex items-center gap-2">
+          <Icon className="w-5 h-5 text-primary" />
+          <Input
+            id={field}
+            type="text"
+            value={dashboard?.profile[field] || ""}
+            onChange={(e) =>
+              setDashboard({
+                ...dashboard!,
+                profile: { ...dashboard!.profile, [field]: e.target.value },
+              })
+            }
+            placeholder={placeholder}
+            className="mt-1"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" variant="default" className="flex-1">
+            Save
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setEditingField(null)}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    ) : (
+      <div className="flex items-center justify-between mb-2">
+        {dashboard?.profile[field] ? (
+          <a
+            href={
+              field === "twitter"
+                ? `https://twitter.com/${dashboard.profile[field]}`
+                : field === "instagram"
+                ? `https://instagram.com/${dashboard.profile[field]}`
+                : `https://linkedin.com/in/${dashboard.profile[field]}`
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary hover:underline flex items-center gap-2"
+          >
+            <Icon className="w-5 h-5 text-primary" />
+            {field === "twitter" || field === "instagram"
+              ? `@${dashboard.profile[field]}`
+              : dashboard.profile[field]}
+          </a>
+        ) : (
+          <span className="text-sm text-muted-foreground flex items-center gap-2">
+            <Icon className="w-5 h-5 text-muted-foreground" />
+            Add {label.toLowerCase()}
+          </span>
+        )}
+        <button
+          onClick={() => setEditingField(field as string)}
+          className="p-2 hover:bg-muted rounded-full transition-colors"
+          title={`Edit ${label}`}
+        >
+          <Pen className="w-4 h-4 text-muted-foreground" />
+        </button>
+      </div>
+    );
+  };
+
+  const renderBioField = () => {
+    return editingField === "bio" ? (
+      <form
+        onSubmit={(e) => handleSubmit(e, "bio")}
+        className="space-y-2 mb-2"
+      >
+        <Label htmlFor="bio">Bio</Label>
+        <Textarea
+          id="bio"
+          value={dashboard?.profile.bio || ""}
+          onChange={(e) =>
+            setDashboard({
+              ...dashboard!,
+              profile: { ...dashboard!.profile, bio: e.target.value },
+            })
+          }
+          placeholder="Share your story"
+          className="mt-1"
+        />
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" variant="default" className="flex-1">
+            Save
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setEditingField(null)}
+            className="flex-1"
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    ) : (
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-sm text-foreground whitespace-pre-wrap">
+          {dashboard?.profile.bio || "Add your bio"}
+        </span>
+        <button
+          onClick={() => setEditingField("bio")}
+          className="p-2 hover:bg-muted rounded-full transition-colors"
+          title="Edit Bio"
+        >
+          <Pen className="w-4 h-4 text-muted-foreground" />
+        </button>
+      </div>
+    );
   };
 
   if (loading) {
@@ -193,45 +344,11 @@ const Profile: React.FC = () => {
               className="object-cover w-full h-full"
             />
           </div>
-          <h2 className="text-2xl font-bold text-foreground">
-            {profile.displayName || "Set a Display Name"}
-          </h2>
-          <p className="text-lg text-muted-foreground">
-            Elo: {profile.eloRating}
-          </p>
-        </div>
-        <Separator className="my-2" />
-        <p className="text-sm text-muted-foreground mb-2">
-          Email: {profile.email}
-        </p>
-        {profile.twitter && !isEditing && (
-          <a
-            href={`https://twitter.com/${profile.twitter}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-primary hover:underline flex items-center mb-2"
-          >
-            <Twitter className="w-4 h-4 mr-1" /> @{profile.twitter}
-          </a>
-        )}
-        {!isEditing ? (
-          <>
-            <p className="text-sm text-foreground mb-4 whitespace-pre-wrap">
-              {profile.bio || "Add a bio to share your story!"}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsEditing(true)}
-              className="w-full hover:bg-primary hover:text-primary-foreground transition-colors"
+          {editingField === "displayName" ? (
+            <form
+              onSubmit={(e) => handleSubmit(e, "displayName")}
+              className="flex flex-col items-center space-y-2 w-full"
             >
-              Edit Profile
-            </Button>
-          </>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <Label htmlFor="displayName">Display Name</Label>
               <Input
                 id="displayName"
                 type="text"
@@ -242,43 +359,76 @@ const Profile: React.FC = () => {
                     profile: { ...profile, displayName: e.target.value },
                   })
                 }
-                className="mt-1"
+                ref={inputRef}
+                className="text-2xl font-bold h-10 w-40"
+                placeholder="Enter name"
               />
-            </div>
-            <div>
-              <Label htmlFor="bio">Bio</Label>
-              <Textarea
-                id="bio"
-                value={profile.bio || ""}
-                onChange={(e) =>
-                  setDashboard({
-                    ...dashboard,
-                    profile: { ...profile, bio: e.target.value },
-                  })
-                }
-                className="mt-1"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                size="sm"
-                variant="default"
-                className="flex-1"
+              <div className="flex gap-2 w-full">
+                <Button type="submit" size="sm" variant="default" className="flex-1">
+                  Save
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setEditingField(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <h2 className="text-2xl font-bold text-foreground">
+                {profile.displayName || "Steve"}
+              </h2>
+              <button
+                onClick={() => setEditingField("displayName")}
+                className="p-1 hover:bg-muted rounded-full"
+                title="Edit Display Name"
               >
-                Save
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsEditing(false)}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
+                <Pen
+                  className={`w-5 h-5 ${profile.displayName ? "text-primary" : "text-muted-foreground"}`}
+                />
+              </button>
             </div>
-          </form>
-        )}
+          )}
+          <p className="text-lg bg-primary text-primary-foreground px-2 py-1 rounded mt-2">
+            Elo: {profile.eloRating}
+          </p>
+        </div>
+        <Separator className="my-2" />
+        <p className="text-sm text-muted-foreground mb-2">
+          Email: {profile.email}
+        </p>
+        {/* Socials Section */}
+        <div className="space-y-2 mb-4">
+          <h3 className="text-sm font-semibold text-foreground">Socials</h3>
+          {renderEditableSocialField(
+            "twitter",
+            "X / Twitter",
+            Twitter,
+            "Your Twitter handle (without @)"
+          )}
+          {renderEditableSocialField(
+            "instagram",
+            "Instagram",
+            Instagram,
+            "Your Instagram handle (without @)"
+          )}
+          {renderEditableSocialField(
+            "linkedin",
+            "LinkedIn",
+            Linkedin,
+            "Your LinkedIn profile (username or ID)"
+          )}
+        </div>
+        <Separator className="my-2" />
+        {/* Bio Section */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground">Bio</h3>
+          {renderBioField()}
+        </div>
       </div>
 
       {/* Right Column: Dashboard */}
