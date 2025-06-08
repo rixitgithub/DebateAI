@@ -15,26 +15,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// calculateEloRating computes new Elo ratings after a match
-func calculateEloRating(ratingA, ratingB int, scoreA float64) (newRatingA, newRatingB int) {
-	const K = 32
-	expectedA := 1.0 / (1.0 + pow(10, float64(ratingB-ratingA)/400.0))
-	scoreB := 1.0 - scoreA
-	expectedB := 1.0 - expectedA
-
-	newRatingA = ratingA + int(float64(K)*(scoreA-expectedA))
-	newRatingB = ratingB + int(float64(K)*(scoreB-expectedB))
-	return newRatingA, newRatingB
-}
-
-// pow computes base^exponent as a simple helper
-func pow(base, exponent float64) float64 {
-	result := 1.0
-	for i := 0; i < int(exponent); i++ {
-		result *= base
-	}
-	return result
-}
 
 // GetProfile retrieves and returns user profile data
 func GetProfile(ctx *gin.Context) {
