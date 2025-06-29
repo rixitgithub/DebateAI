@@ -1,3 +1,4 @@
+// Profile.tsx (partial, focusing on avatar-related code)
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -199,6 +200,7 @@ const Profile: React.FC = () => {
       return;
     }
     try {
+      // Optimistically update the local state
       setDashboard({
         ...dashboard,
         profile: { ...dashboard.profile, avatarUrl },
@@ -217,8 +219,33 @@ const Profile: React.FC = () => {
     } catch (err) {
       setErrorMessage("Failed to update avatar.");
       console.error(err);
+      // Optionally revert state on failure
+      setDashboard({
+        ...dashboard,
+        profile: {
+          ...dashboard.profile,
+          avatarUrl: dashboard.profile.avatarUrl,
+        },
+      });
     }
   };
+
+  if (loading) {
+    return (
+      <div className="p-4 flex justify-center items-center min-h-[calc(100vh-4rem)]">
+        <div className="text-center">
+          <div className="animate-pulse rounded-full bg-muted h-10 w-10 mx-auto mb-4"></div>
+          <p className="text-muted-foreground text-sm">Loading Profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dashboard) {
+    return (
+      <div className="p-4 text-red-500 text-center text-sm">{errorMessage}</div>
+    );
+  }
 
   const renderEditableSocialField = (
     field: keyof ProfileData,

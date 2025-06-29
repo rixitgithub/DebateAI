@@ -38,6 +38,7 @@ func extractNameFromEmail(email string) string {
 	return email
 }
 
+
 func GetProfile(c *gin.Context) {
 	email := c.GetString("email")
 	if email == "" {
@@ -186,6 +187,7 @@ func UpdateProfile(ctx *gin.Context) {
 		Twitter     string `json:"twitter"`
 		Instagram   string `json:"instagram"`
 		LinkedIn    string `json:"linkedin"`
+		AvatarURL   string `json:"avatarUrl"` // Added AvatarURL
 	}
 	if err := ctx.ShouldBindJSON(&updateData); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid body"})
@@ -198,6 +200,7 @@ func UpdateProfile(ctx *gin.Context) {
 		"twitter":     strings.TrimSpace(updateData.Twitter),
 		"instagram":   strings.TrimSpace(updateData.Instagram),
 		"linkedin":    strings.TrimSpace(updateData.LinkedIn),
+		"avatarUrl":   strings.TrimSpace(updateData.AvatarURL), // Added avatarUrl
 		"updatedAt":   time.Now(),
 	}}
 
