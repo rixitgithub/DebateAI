@@ -14,45 +14,56 @@ import { createDebate } from "@/services/vsbot";
 import { getProfile } from "@/services/profileService";
 import { getAuthToken } from "@/utils/auth";
 
-// Bot definitions with avatars, hover quotes, and ratings
-const bots = [
+// Bot type definition
+interface Bot {
+  name: string;
+  level: string;
+  desc: string;
+  avatar: string;
+  quote: string;
+  rating: number;
+}
+
+// Bot definitions
+const allBots: Bot[] = [
+  // Classic bots
   {
     name: "Rookie Rick",
     level: "Easy",
     desc: "A beginner who stumbles over logic.",
-    avatar: "https://avatar.iran.liara.run/public/26",
-    quote: "Uh, wait, what’s your point again?",
+    avatar: "/images/rookie_rick.jpg",
+    quote: "Uh, wait, what's your point again?",
     rating: 1200,
   },
   {
     name: "Casual Casey",
     level: "Easy",
     desc: "Friendly but not too sharp.",
-    avatar: "https://avatar.iran.liara.run/public/22",
-    quote: "Let’s just chill and chat, okay?",
+    avatar: "/images/casual_casey.jpg",
+    quote: "Let's just chill and chat, okay?",
     rating: 1300,
   },
   {
     name: "Moderate Mike",
     level: "Medium",
     desc: "Balanced and reasonable.",
-    avatar: "https://avatar.iran.liara.run/public/38",
-    quote: "I see your side, but here’s mine.",
+    avatar: "/images/moderate_mike.jpg",
+    quote: "I see your side, but here's mine.",
     rating: 1500,
   },
   {
     name: "Sassy Sarah",
     level: "Medium",
     desc: "Witty with decent arguments.",
-    avatar: "https://avatar.iran.liara.run/public/78",
-    quote: "Oh honey, you’re in for it now!",
+    avatar: "/images/sassy_sarah.jpg",
+    quote: "Oh honey, you're in for it now!",
     rating: 1600,
   },
   {
     name: "Innovative Iris",
     level: "Medium",
     desc: "A creative thinker",
-    avatar: "https://avatar.iran.liara.run/public/72",
+    avatar: "/images/innovative_iris.jpg",
     quote: "Fresh ideas fuel productive debates.",
     rating: 1550,
   },
@@ -60,7 +71,7 @@ const bots = [
     name: "Tough Tony",
     level: "Hard",
     desc: "Logical and relentless.",
-    avatar: "https://avatar.iran.liara.run/public/37",
+    avatar: "/images/tough_tony.jpg",
     quote: "Prove it or step aside.",
     rating: 1700,
   },
@@ -68,31 +79,77 @@ const bots = [
     name: "Expert Emma",
     level: "Hard",
     desc: "Master of evidence and rhetoric.",
-    avatar: "https://avatar.iran.liara.run/public/90",
-    quote: "Facts don’t care about your feelings.",
+    avatar: "/images/expert_emma.jpg",
+    quote: "Facts don't care about your feelings.",
     rating: 1800,
   },
   {
     name: "Grand Greg",
     level: "Expert",
     desc: "Unbeatable debate titan.",
-    avatar: "https://avatar.iran.liara.run/public/45",
+    avatar: "/images/grand_greg.jpg",
     quote: "Checkmate. Your move.",
     rating: 2000,
+  },
+  // Cinematic bots
+  {
+    name: "Yoda",
+    level: "Legends",
+    desc: "Wise, cryptic, and patient. Speaks in riddles.",
+    avatar: "/images/yoda.jpeg",
+    quote:
+      "Hmm, strong your point is. But ask yourself, does the tree fall because it wills, or because the wind commands?",
+    rating: 2400,
+  },
+  {
+    name: "Tony Stark",
+    level: "Legends",
+    desc: "Witty, arrogant, and clever. Loves quick comebacks.",
+    avatar: "/images/tony.webp",
+    quote:
+      "Nice try, but your logic's running on fumes. Step aside, I'll show you how a genius does it.",
+    rating: 2200,
+  },
+  {
+    name: "Professor Dumbledore",
+    level: "Legends",
+    desc: "Calm, strategic, and insightful. Sees the bigger picture.",
+    avatar: "/images/dumbledore.avif",
+    quote:
+      "A valid point, but have you considered its ripple effects? Let us explore the deeper truth.",
+    rating: 2500,
+  },
+  {
+    name: "Rafiki",
+    level: "Legends",
+    desc: "Quirky, playful, and humorous. Teaches through stories.",
+    avatar: "/images/rafiki.jpeg",
+    quote:
+      "Haha! You think too hard, my friend! The answer's right there, like a monkey on a branch!",
+    rating: 1800,
+  },
+  {
+    name: "Darth Vader",
+    level: "Legends",
+    desc: "Powerful, stern, and intimidating. Uses forceful logic.",
+    avatar: "/images/darthvader.jpg",
+    quote:
+      "Your reasoning falters. Submit to the strength of my argument, or be crushed.",
+    rating: 2300,
   },
 ];
 
 // Predefined debate topics
-const predefinedTopics = [
+const predefinedTopics: string[] = [
   "Should AI rule the world?",
   "Is space exploration worth the cost?",
   "Should social media be regulated?",
-  "Is climate change humanity’s fault?",
+  "Is climate change humanity's fault?",
   "Should college education be free?",
 ];
 
 // Default phase timings (in seconds, same for user and bot)
-const defaultPhaseTimings = [
+const defaultPhaseTimings: { name: string; time: number }[] = [
   { name: "Opening Statements", time: 240 },
   { name: "Cross-Examination", time: 180 },
   { name: "Closing Statements", time: 180 },
@@ -112,7 +169,7 @@ const Loader: React.FC = () => (
 );
 
 // Returns a custom special message for each bot
-const getBotSpecialMessage = (botName: string | null) => {
+const getBotSpecialMessage = (botName: string): string => {
   switch (botName) {
     case "Rookie Rick":
       return "Get ready for a charming, underdog performance!";
@@ -130,6 +187,16 @@ const getBotSpecialMessage = (botName: string | null) => {
       return "Expert-level debate incoming – sharpen your wit!";
     case "Grand Greg":
       return "A legendary showdown is about to begin!";
+    case "Yoda":
+      return "Prepare for wisdom wrapped in riddles!";
+    case "Tony Stark":
+      return "Get ready for sharp wit and genius banter!";
+    case "Professor Dumbledore":
+      return "A strategic and insightful debate awaits!";
+    case "Rafiki":
+      return "Expect laughter and surprising wisdom!";
+    case "Darth Vader":
+      return "Brace for an intense, commanding debate!";
     default:
       return "";
   }
@@ -140,8 +207,9 @@ const BotSelection: React.FC = () => {
   const [topic, setTopic] = useState<string>("custom");
   const [customTopic, setCustomTopic] = useState<string>("");
   const [stance, setStance] = useState<string>("random");
-  const [phaseTimings, setPhaseTimings] = useState(defaultPhaseTimings);
-  const [isLoading, setIsLoading] = useState(false);
+  const [phaseTimings, setPhaseTimings] =
+    useState<{ name: string; time: number }[]>(defaultPhaseTimings);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [user, setUser] = useState<{
     email: string;
     displayName: string;
@@ -149,15 +217,20 @@ const BotSelection: React.FC = () => {
     eloRating: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedLevel, setExpandedLevel] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const effectiveTopic = topic === "custom" ? customTopic : topic;
+  const selectedBotObj = selectedBot
+    ? allBots.find((b) => b.name === selectedBot)
+    : null;
 
   // Fetch user profile when component mounts
   useEffect(() => {
     const fetchUserData = async () => {
       const token = getAuthToken();
       if (!token) {
+        setError("No authentication token found");
         return;
       }
       try {
@@ -176,59 +249,91 @@ const BotSelection: React.FC = () => {
     fetchUserData();
   }, []);
 
-  // Update phase timing ensuring the value is within the allowed range.
+  // Difficulty levels with counts, sorted by difficulty
+  const levels = [
+    {
+      name: "Legends",
+      count: allBots.filter((bot) => bot.level === "Legends").length,
+    },
+    {
+      name: "Easy",
+      count: allBots.filter((bot) => bot.level === "Easy").length,
+    },
+    {
+      name: "Medium",
+      count: allBots.filter((bot) => bot.level === "Medium").length,
+    },
+    {
+      name: "Hard",
+      count: allBots.filter((bot) => bot.level === "Hard").length,
+    },
+    {
+      name: "Expert",
+      count: allBots.filter((bot) => bot.level === "Expert").length,
+    },
+  ].filter((level) => level.count > 0);
+
+  // Update phase timing ensuring the value is within the allowed range
   const updatePhaseTiming = (phaseIndex: number, value: string) => {
     const newTimings = [...phaseTimings];
-    const timeInSeconds = Math.max(60, Math.min(600, parseInt(value) || 0));
+    const parsedValue = parseInt(value, 10);
+    const timeInSeconds = isNaN(parsedValue)
+      ? phaseTimings[phaseIndex].time
+      : Math.max(60, Math.min(600, parsedValue));
     newTimings[phaseIndex].time = timeInSeconds;
     setPhaseTimings(newTimings);
   };
 
+  const toggleLevel = (level: string) => {
+    setExpandedLevel(expandedLevel === level ? null : level);
+  };
+
   const startDebate = async () => {
-    if (selectedBot && effectiveTopic) {
-      const bot = bots.find((b) => b.name === selectedBot);
+    if (!selectedBot || !effectiveTopic) {
+      setError("Please select a bot and a topic");
+      return;
+    }
 
-      // Determine the final stance
-      const finalStance =
-        stance === "random"
-          ? Math.random() < 0.5
-            ? "for"
-            : "against"
-          : stance;
+    const bot = allBots.find((b) => b.name === selectedBot);
+    if (!bot) {
+      setError("Selected bot not found");
+      return;
+    }
 
-      // Build payload
-      const debatePayload = {
-        botName: bot!.name,
-        botLevel: bot!.level,
-        topic: effectiveTopic,
-        stance: finalStance,
-        history: [],
+    const finalStance =
+      stance === "random" ? (Math.random() < 0.5 ? "for" : "against") : stance;
+
+    // Build payload
+    const debatePayload = {
+      botName: bot.name,
+      botLevel: bot.level,
+      topic: effectiveTopic,
+      stance: finalStance,
+      history: [],
+      phaseTimings,
+    };
+
+    try {
+      setIsLoading(true);
+      const data = await createDebate(debatePayload);
+      const state = {
+        ...data,
         phaseTimings,
+        stance: finalStance,
+        user: user || {
+          email: "",
+          firstName: "Guest",
+          lastName: "",
+          avatarUrl: "https://api.dicebear.com/9.x/big-ears/svg?seed=Guest",
+          eloRating: 1500,
+        },
       };
-
-      try {
-        setIsLoading(true);
-        const data = await createDebate(debatePayload);
-        const state = {
-          ...data,
-          phaseTimings,
-          stance: finalStance,
-          user: user || {
-            email: "",
-            firstName: "Guest",
-            lastName: "",
-            avatarUrl: "https://api.dicebear.com/9.x/big-ears/svg?seed=Guest",
-            eloRating: 1500,
-          }, // Fallback user data
-        };
-        console.log("Navigation state:", state);
-        navigate(`/debate/${data.debateId}`, { state });
-      } catch (error) {
-        console.error("Error starting debate:", error);
-        setError("Failed to start debate");
-      } finally {
-        setIsLoading(false);
-      }
+      navigate(`/debate/${data.debateId}`, { state });
+    } catch (error) {
+      console.error("Error starting debate:", error);
+      setError("Failed to start debate");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -236,7 +341,8 @@ const BotSelection: React.FC = () => {
     <>
       {isLoading && <Loader />}
       <div className="bg-gradient-to-br from-background via-accent/10 to-background p-4">
-        <div className="text-center mb-10">
+        {/* Header Section */}
+        <div className="text-center mb-6">
           <h1 className="text-2xl sm:text-4xl font-extrabold text-foreground tracking-wide">
             Pick Your <span className="text-primary">Debate</span> Rival!
           </h1>
@@ -246,62 +352,113 @@ const BotSelection: React.FC = () => {
           {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </div>
 
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Main Content Grid */}
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Bot Selection Section */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {bots.map((bot) => (
-              <div
-                key={bot.name}
-                onClick={() => setSelectedBot(bot.name)}
-                className={`z-20 relative cursor-pointer transition-transform duration-300 hover:scale-105 rounded-md border ${
-                  selectedBot === bot.name
-                    ? "border-2 border-primary"
-                    : "border border-gray-300"
-                } bg-white shadow-sm group overflow-visible`}
-                style={{ height: "200px" }}
-              >
-                <div className="flex flex-col items-center justify-center h-full p-2 relative">
-                  {/* Avatar */}
-                  <div className="w-12 h-12 rounded-full overflow-hidden mb-1 border-2 border-primary shadow-md">
+          <div className="bg-white border border-gray-300 rounded-md shadow-md p-4">
+            <h2 className="text-xl font-light text-gray-800 mb-4">
+              Pick Your <span className="text-primary">Bot</span>
+            </h2>
+
+            {/* Selected Bot Preview */}
+            {selectedBotObj && (
+              <div className="border border-gray-300 rounded-md mb-4 p-3 bg-gray-50">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">
+                  Selected Bot
+                </h3>
+                <div className="flex items-center">
+                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary mr-3">
                     <img
-                      src={bot.avatar}
-                      alt={bot.name}
-                      className="object-cover w-full h-full"
+                      src={selectedBotObj.avatar}
+                      alt={selectedBotObj.name}
+                      className="w-full h-full object-cover"
                     />
                   </div>
-                  {/* Chat Bubble */}
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-50">
-                    <div className="relative bg-black text-white text-[0.75rem] rounded-lg shadow-lg px-4 py-2 w-48 text-center">
-                      {bot.quote}
-                      <div className="absolute bottom-0 left-1/2 transform translate-y-full -translate-x-1/2">
-                        <svg
-                          width="12"
-                          height="8"
-                          viewBox="0 0 12 8"
-                          fill="black"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path d="M6 8L0 0H12L6 8Z" />
-                        </svg>
-                      </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800">
+                      {selectedBotObj.name}
+                    </h4>
+                    <p className="text-xs text-gray-600 italic">
+                      "{selectedBotObj.quote}"
+                    </p>
+                    <div className="flex mt-1">
+                      <span className="text-xs bg-gray-200 px-2 py-1 rounded mr-2">
+                        {selectedBotObj.level}
+                      </span>
+                      <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">
+                        {selectedBotObj.rating} Rating
+                      </span>
                     </div>
                   </div>
-                  {/* Bot Info */}
-                  <h3 className="text-xs md:text-sm font-semibold text-gray-800 text-center">
-                    {bot.name}
-                  </h3>
-                  <p className="text-[0.65rem] md:text-[0.75rem] text-gray-600">
-                    {bot.level}
-                  </p>
-                  <p className="text-xl font-extrabold text-primary opacity-50">
-                    {bot.rating}
-                  </p>
-                  <p className="text-[0.55rem] md:text-[0.65rem] text-gray-500 mt-1 text-center line-clamp-2 px-1">
-                    {bot.desc}
-                  </p>
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* Difficulty Cards (Fixed Height Scroller) */}
+            <div className="space-y-3 max-h-[250px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+              {levels.map((level) => (
+                <div
+                  key={level.name}
+                  className={`border rounded-md cursor-pointer transition-all ${
+                    expandedLevel === level.name
+                      ? "border-primary shadow-sm"
+                      : "border-gray-300 hover:border-gray-400"
+                  }`}
+                >
+                  <div
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded-t-md"
+                    onClick={() => toggleLevel(level.name)}
+                  >
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-800">
+                        {level.name}
+                      </span>
+                      <span className="ml-2 bg-gray-200 rounded-full px-2 py-1 text-xs">
+                        {level.count} bots
+                      </span>
+                    </div>
+                    <span className="transform transition-transform">
+                      {expandedLevel === level.name ? "▲" : "▼"}
+                    </span>
+                  </div>
+
+                  {expandedLevel === level.name && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-white border-t border-gray-200">
+                      {allBots
+                        .filter((bot) => bot.level === level.name)
+                        .map((bot) => (
+                          <div
+                            key={bot.name}
+                            onClick={() => setSelectedBot(bot.name)}
+                            className={`relative flex flex-col items-center p-2 rounded-md border transition-colors cursor-pointer group ${
+                              selectedBot === bot.name
+                                ? "border-2 border-primary bg-blue-50"
+                                : "border-gray-200 hover:bg-gray-50"
+                            }`}
+                          >
+                            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary">
+                              <img
+                                src={bot.avatar}
+                                alt={bot.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            {/* Hover overlay */}
+                            <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-md">
+                              <h3 className="text-sm font-medium text-white text-center">
+                                {bot.name}
+                              </h3>
+                              <div className="text-xs font-semibold text-primary">
+                                {bot.rating} Rating
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Debate Setup Section */}
@@ -341,7 +498,9 @@ const BotSelection: React.FC = () => {
                   {topic === "custom" && (
                     <Input
                       value={customTopic}
-                      onChange={(e) => setCustomTopic(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setCustomTopic(e.target.value)
+                      }
                       placeholder="Enter your custom topic"
                       className="mt-2 bg-white text-gray-800"
                     />
@@ -382,7 +541,7 @@ const BotSelection: React.FC = () => {
                       </span>
                       <Input
                         type="number"
-                        value={phase.time}
+                        value={phase.time.toString()}
                         onChange={(e) =>
                           updatePhaseTiming(index, e.target.value)
                         }
