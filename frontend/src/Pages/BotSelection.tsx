@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "../components/ui/separator";
 import { createDebate } from "@/services/vsbot";
-import { getProfile } from "@/services/profileService";
-import { getAuthToken } from "@/utils/auth";
+import { useAtom } from "jotai";
+import { userAtom } from "@/state/userAtom";
 
 // Bot type definition
 interface Bot {
@@ -210,12 +210,7 @@ const BotSelection: React.FC = () => {
   const [phaseTimings, setPhaseTimings] =
     useState<{ name: string; time: number }[]>(defaultPhaseTimings);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [user, setUser] = useState<{
-    email: string;
-    displayName: string;
-    avatarUrl: string;
-    eloRating: number;
-  } | null>(null);
+  const [user] = useAtom(userAtom);
   const [error, setError] = useState<string | null>(null);
   const [expandedLevel, setExpandedLevel] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -224,30 +219,6 @@ const BotSelection: React.FC = () => {
   const selectedBotObj = selectedBot
     ? allBots.find((b) => b.name === selectedBot)
     : null;
-
-  // Fetch user profile when component mounts
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const token = getAuthToken();
-      if (!token) {
-        setError("No authentication token found");
-        return;
-      }
-      try {
-        const response = await getProfile(token);
-        setUser({
-          email: response.profile.email,
-          displayName: response.profile.displayName,
-          avatarUrl: response.profile.avatarUrl,
-          eloRating: response.profile.eloRating,
-        });
-      } catch (err) {
-        setError("Failed to load user profile");
-        console.error(err);
-      }
-    };
-    fetchUserData();
-  }, []);
 
   // Difficulty levels with counts, sorted by difficulty
   const levels = [
@@ -320,13 +291,10 @@ const BotSelection: React.FC = () => {
         ...data,
         phaseTimings,
         stance: finalStance,
-        user: user || {
-          email: "",
-          firstName: "Guest",
-          lastName: "",
-          avatarUrl: "https://api.dicebear.com/9.x/big-ears/svg?seed=Guest",
-          eloRating: 1500,
-        },
+        userId: user?.email || "guest@example.com",
+        botName: bot.name,
+        botLevel: bot.level,
+        topic: effectiveTopic,
       };
       navigate(`/debate/${data.debateId}`, { state });
     } catch (error) {

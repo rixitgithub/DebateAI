@@ -24,15 +24,18 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	services.InitDebateVsBotService(cfg)
+		services.InitDebateVsBotService(cfg)
 	services.InitCoachService()
-	services.InitRatingService(cfg) 
+	services.InitRatingService(cfg)
 	
 	// Connect to MongoDB using the URI from the configuration
 	if err := db.ConnectMongoDB(cfg.Database.URI); err != nil {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	log.Println("Connected to MongoDB")
+	
+	// Start the room watching service for matchmaking after DB connection
+	go websocket.WatchForNewRooms()
 
 	utils.SetJWTSecret(cfg.JWT.Secret)
 
@@ -77,6 +80,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	router.POST("/forgotPassword", routes.ForgotPasswordRouteHandler)
 	router.POST("/confirmForgotPassword", routes.VerifyForgotPasswordRouteHandler)
 	router.POST("/verifyToken", routes.VerifyTokenRouteHandler)
+
+	// WebSocket routes (handle auth internally)
+	router.GET("/ws/matchmaking", websocket.MatchmakingHandler)
 
 	// Protected routes (JWT auth)
 	auth := router.Group("/")

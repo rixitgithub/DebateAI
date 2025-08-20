@@ -1,5 +1,14 @@
-import { createContext, useState, useEffect, ReactNode, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  createContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSetAtom } from 'jotai';
+import { userAtom } from '@/state/userAtom';
+import type { User } from '@/types/user';
 
 const baseURL = import.meta.env.VITE_BASE_URL;
 
@@ -14,42 +23,51 @@ interface AuthContextType {
   signup: (email: string, password: string) => Promise<void>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
-  confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<void>;
+  confirmForgotPassword: (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => Promise<void>;
   googleLogin: (idToken: string) => Promise<void>;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem('token')
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const setUser = useSetAtom(userAtom);
 
   const handleError = (error: unknown) => {
-    const message = error instanceof Error ? error.message : "An unexpected error occurred";
+    const message =
+      error instanceof Error ? error.message : 'An unexpected error occurred';
     setError(message);
     throw error;
   };
 
   const verifyToken = useCallback(async () => {
-    const storedToken = localStorage.getItem("token");
+    const storedToken = localStorage.getItem('token');
     if (!storedToken) return;
-    console.log(storedToken);
     try {
       const response = await fetch(`${baseURL}/verifyToken`, {
-        method: "POST",
+        method: 'POST',
         headers: { Authorization: `Bearer ${storedToken}` },
       });
-  
-      if (!response.ok) throw new Error("Token expired or invalid");
+
+      if (!response.ok) throw new Error('Token expired or invalid');
       setToken(storedToken);
     } catch (error) {
-      console.log("error", error);
+      console.log('error', error);
       logout();
     }
   }, []);
-  
+
   useEffect(() => {
     verifyToken();
   }, [verifyToken]);
@@ -58,17 +76,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const response = await fetch(`${baseURL}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Login failed");
+      if (!response.ok) throw new Error(data.message || 'Login failed');
 
       setToken(data.accessToken);
-      localStorage.setItem("token", data.accessToken);
-      navigate("/");
+      localStorage.setItem('token', data.accessToken);
+      // Set user details in userAtom based on the new User type
+      setUser({
+        id: data.user?.id || undefined,
+        email: data.user?.email || email,
+        displayName: data.user?.displayName || 'User',
+        bio: data.user?.bio || '',
+        rating: data.user?.rating || 1500,
+        rd: data.user?.rd || 350, // Default Glicko-2 RD value
+        volatility: data.user?.volatility || 0.06, // Default Glicko-2 volatility
+        lastRatingUpdate:
+          data.user?.lastRatingUpdate || new Date().toISOString(),
+        avatarUrl:
+          data.user?.avatarUrl || 'https://avatar.iran.liara.run/public/10',
+        twitter: data.user?.twitter || undefined,
+        instagram: data.user?.instagram || undefined,
+        linkedin: data.user?.linkedin || undefined,
+        password: '', // Password should not be stored in client-side state
+        nickname: data.user?.nickname || 'User',
+        isVerified: data.user?.isVerified || false,
+        verificationCode: data.user?.verificationCode || undefined,
+        resetPasswordCode: data.user?.resetPasswordCode || undefined,
+        createdAt: data.user?.createdAt || new Date().toISOString(),
+        updatedAt: data.user?.updatedAt || new Date().toISOString(),
+      });
+      navigate('/');
     } catch (error) {
       handleError(error);
     } finally {
@@ -80,14 +122,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const response = await fetch(`${baseURL}/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || "Signup failed");
+        throw new Error(data.message || 'Signup failed');
       }
     } catch (error) {
       handleError(error);
@@ -100,15 +142,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const response = await fetch(`${baseURL}/verifyEmail`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, confirmationCode: code }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || "Verification failed");
+        throw new Error(data.message || 'Verification failed');
       }
+      // Optionally update userAtom with isVerified: true
+      setUser((prev: User | null) =>
+        prev ? { ...prev, isVerified: true, verificationCode: undefined } : null
+      );
     } catch (error) {
       handleError(error);
     } finally {
@@ -120,14 +166,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const response = await fetch(`${baseURL}/forgotPassword`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || "Password reset failed");
+        throw new Error(data.message || 'Password reset failed');
       }
     } catch (error) {
       handleError(error);
@@ -136,18 +182,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const confirmForgotPassword = async (email: string, code: string, newPassword: string) => {
+  const confirmForgotPassword = async (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => {
     setLoading(true);
     try {
       const response = await fetch(`${baseURL}/confirmForgotPassword`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code, newPassword }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || "Password update failed");
+        throw new Error(data.message || 'Password update failed');
       }
     } catch (error) {
       handleError(error);
@@ -160,17 +210,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const response = await fetch(`${baseURL}/googleLogin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Google login failed");
+      if (!response.ok) throw new Error(data.message || 'Google login failed');
 
       setToken(data.accessToken);
-      localStorage.setItem("token", data.accessToken);
-      navigate("/");
+      localStorage.setItem('token', data.accessToken);
+      // Set user details in userAtom based on the new User type
+      setUser({
+        id: data.user?.id || undefined,
+        email: data.user?.email || 'googleuser@example.com',
+        displayName: data.user?.displayName || 'Google User',
+        bio: data.user?.bio || '',
+        rating: data.user?.rating || 1500,
+        rd: data.user?.rd || 350,
+        volatility: data.user?.volatility || 0.06,
+        lastRatingUpdate:
+          data.user?.lastRatingUpdate || new Date().toISOString(),
+        avatarUrl:
+          data.user?.avatarUrl || 'https://avatar.iran.liara.run/public/10',
+        twitter: data.user?.twitter || undefined,
+        instagram: data.user?.instagram || undefined,
+        linkedin: data.user?.linkedin || undefined,
+        password: '',
+        nickname: data.user?.nickname || 'Google User',
+        isVerified: data.user?.isVerified || true, // Google login often implies verified
+        verificationCode: data.user?.verificationCode || undefined,
+        resetPasswordCode: data.user?.resetPasswordCode || undefined,
+        createdAt: data.user?.createdAt || new Date().toISOString(),
+        updatedAt: data.user?.updatedAt || new Date().toISOString(),
+      });
+      console.log('User after Google login:', data.user);
+      navigate('/');
     } catch (error) {
       handleError(error);
     } finally {
@@ -180,8 +255,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = () => {
     setToken(null);
-    localStorage.removeItem("token");
-    navigate("/auth");
+    localStorage.removeItem('token');
+    setUser(null); // Clear userAtom on logout
+    navigate('/auth');
   };
 
   return (

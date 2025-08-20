@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"arguehub/db"
+	"arguehub/services"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -126,27 +127,56 @@ func GetRoomsHandler(c *gin.Context) {
 // JoinRoomHandler handles POST /rooms/:id/join where a user joins a room.
 func JoinRoomHandler(c *gin.Context) {
 	roomId := c.Param("id")
-	collection := db.MongoClient.Database("DebateAI").Collection("rooms")
+	
+	// Get user email from middleware-set context
+	email, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user email not found"})
+		return
+	}
+
+	// Query user document using email
+	userCollection := db.MongoClient.Database("DebateAI").Collection("users")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Dummy participant (replace this with actual user in production)
-	dummyUser := Participant{
-		ID:       "dummyUserID",
-		Username: "JohnDoe",
-		Elo:      1200,
+	var user struct {
+		ID          string `bson:"_id"`
+		Email       string `bson:"email"`
+		DisplayName string `bson:"displayName"`
+		Rating      int    `bson:"eloRating"`
 	}
 
+	err := userCollection.FindOne(ctx, bson.M{"email": email.(string)}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Create participant
+	participant := Participant{
+		ID:       user.ID,
+		Username: user.DisplayName,
+		Elo:      user.Rating,
+	}
+
+	// Use atomic operation to join room
+	roomCollection := db.MongoClient.Database("DebateAI").Collection("rooms")
 	filter := bson.M{"_id": roomId}
 	update := bson.M{
-		"$addToSet": bson.M{"participants": dummyUser},
+		"$addToSet": bson.M{"participants": participant},
 	}
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 
 	var updatedRoom Room
-	if err := collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedRoom); err != nil {
+	if err := roomCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedRoom); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not join room"})
 		return
 	}
+
+	// Remove user from matchmaking pool if they were in it
+	matchmakingService := services.GetMatchmakingService()
+	matchmakingService.RemoveFromPool(user.ID)
+
 	c.JSON(http.StatusOK, updatedRoom)
 }

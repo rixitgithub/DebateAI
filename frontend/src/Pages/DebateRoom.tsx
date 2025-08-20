@@ -5,6 +5,131 @@ import { Input } from "../components/ui/input";
 import { sendDebateMessage, judgeDebate } from "@/services/vsbot";
 import JudgmentPopup from "@/components/JudgementPopup";
 import { Mic, MicOff } from "lucide-react";
+import { useAtom } from "jotai";
+import { userAtom } from "@/state/userAtom";
+
+// Bot type definition (same as in BotSelection)
+interface Bot {
+  name: string;
+  level: string;
+  desc: string;
+  avatar: string;
+  quote: string;
+  rating: number;
+}
+
+// Bot definitions (same as in BotSelection)
+const allBots: Bot[] = [
+  {
+    name: "Rookie Rick",
+    level: "Easy",
+    desc: "A beginner who stumbles over logic.",
+    avatar: "/images/rookie_rick.jpg",
+    quote: "Uh, wait, what's your point again?",
+    rating: 1200,
+  },
+  {
+    name: "Casual Casey",
+    level: "Easy",
+    desc: "Friendly but not too sharp.",
+    avatar: "/images/casual_casey.jpg",
+    quote: "Let's just chill and chat, okay?",
+    rating: 1300,
+  },
+  {
+    name: "Moderate Mike",
+    level: "Medium",
+    desc: "Balanced and reasonable.",
+    avatar: "/images/moderate_mike.jpg",
+    quote: "I see your side, but here's mine.",
+    rating: 1500,
+  },
+  {
+    name: "Sassy Sarah",
+    level: "Medium",
+    desc: "Witty with decent arguments.",
+    avatar: "/images/sassy_sarah.jpg",
+    quote: "Oh honey, you're in for it now!",
+    rating: 1600,
+  },
+  {
+    name: "Innovative Iris",
+    level: "Medium",
+    desc: "A creative thinker",
+    avatar: "/images/innovative_iris.jpg",
+    quote: "Fresh ideas fuel productive debates.",
+    rating: 1550,
+  },
+  {
+    name: "Tough Tony",
+    level: "Hard",
+    desc: "Logical and relentless.",
+    avatar: "/images/tough_tony.jpg",
+    quote: "Prove it or step aside.",
+    rating: 1700,
+  },
+  {
+    name: "Expert Emma",
+    level: "Hard",
+    desc: "Master of evidence and rhetoric.",
+    avatar: "/images/expert_emma.jpg",
+    quote: "Facts don't care about your feelings.",
+    rating: 1800,
+  },
+  {
+    name: "Grand Greg",
+    level: "Expert",
+    desc: "Unbeatable debate titan.",
+    avatar: "/images/grand_greg.jpg",
+    quote: "Checkmate. Your move.",
+    rating: 2000,
+  },
+  {
+    name: "Yoda",
+    level: "Legends",
+    desc: "Wise, cryptic, and patient. Speaks in riddles.",
+    avatar: "/images/yoda.jpeg",
+    quote:
+      "Hmm, strong your point is. But ask yourself, does the tree fall because it wills, or because the wind commands?",
+    rating: 2400,
+  },
+  {
+    name: "Tony Stark",
+    level: "Legends",
+    desc: "Witty, arrogant, and clever. Loves quick comebacks.",
+    avatar: "/images/tony.webp",
+    quote:
+      "Nice try, but your logic's running on fumes. Step aside, I'll show you how a genius does it.",
+    rating: 2200,
+  },
+  {
+    name: "Professor Dumbledore",
+    level: "Legends",
+    desc: "Calm, strategic, and insightful. Sees the bigger picture.",
+    avatar: "/images/dumbledore.avif",
+    quote:
+      "A valid point, but have you considered its ripple effects? Let us explore the deeper truth.",
+    rating: 2500,
+  },
+  {
+    name: "Rafiki",
+    level: "Legends",
+    desc: "Quirky, playful, and humorous. Teaches through stories.",
+    avatar: "/images/rafiki.jpeg",
+    quote:
+      "Haha! You think too hard, my friend! The answer's right there, like a monkey on a branch!",
+    rating: 1800,
+  },
+  {
+    name: "Darth Vader",
+    level: "Legends",
+    desc: "Powerful, stern, and intimidating. Uses forceful logic.",
+    avatar: "/images/darthvader.jpg",
+    quote:
+      "Your reasoning falters. Submit to the strength of my argument, or be crushed.",
+    rating: 2300,
+  },
+];
 
 type Message = {
   sender: "User" | "Bot" | "Judge";
@@ -59,57 +184,6 @@ type JudgmentData = {
   };
 };
 
-const bots = [
-  {
-    name: "Rookie Rick",
-    level: "Easy",
-    desc: "A beginner who stumbles over logic.",
-    avatar: "https://avatar.iran.liara.run/public/26",
-  },
-  {
-    name: "Casual Casey",
-    level: "Easy",
-    desc: "Friendly but not too sharp.",
-    avatar: "https://avatar.iran.liara.run/public/22",
-  },
-  {
-    name: "Moderate Mike",
-    level: "Medium",
-    desc: "Balanced and reasonable.",
-    avatar: "https://avatar.iran.liara.run/public/38",
-  },
-  {
-    name: "Sassy Sarah",
-    level: "Medium",
-    desc: "Witty with decent arguments.",
-    avatar: "https://avatar.iran.liara.run/public/78",
-  },
-  {
-    name: "Innovative Iris",
-    level: "Medium",
-    desc: "A creative thinker",
-    avatar: "https://avatar.iran.liara.run/public/72",
-  },
-  {
-    name: "Tough Tony",
-    level: "Hard",
-    desc: "Logical and relentless.",
-    avatar: "https://avatar.iran.liara.run/public/37",
-  },
-  {
-    name: "Expert Emma",
-    level: "Hard",
-    desc: "Master of evidence and rhetoric.",
-    avatar: "https://avatar.iran.liara.run/public/90",
-  },
-  {
-    name: "Grand Greg",
-    level: "Expert",
-    desc: "Unbeatable debate titan.",
-    avatar: "https://avatar.iran.liara.run/public/45",
-  },
-];
-
 const phaseSequences = [
   ["For", "Against"],
   ["For", "Against", "Against", "For"],
@@ -133,6 +207,8 @@ const DebateRoom: React.FC = () => {
   const debateData = location.state as DebateProps;
   const phases = debateData.phaseTimings;
   const debateKey = `debate_${debateData.userId}_${debateData.topic}_${debateData.debateId}`;
+  const [user] = useAtom(userAtom);
+  console.log("user", user);
 
   const [state, setState] = useState<DebateState>(() => {
     const savedState = localStorage.getItem(debateKey);
@@ -159,14 +235,15 @@ const DebateRoom: React.FC = () => {
   const [judgmentData, setJudgmentData] = useState<JudgmentData | null>(null);
   const [showJudgment, setShowJudgment] = useState(false);
   const [isRecognizing, setIsRecognizing] = useState(false);
-  const [nextTurnPending, setNextTurnPending] = useState(false); // New state to track if bot response is waiting for user to advance
+  const [nextTurnPending, setNextTurnPending] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const botTurnRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const bot = bots.find((b) => b.name === debateData.botName) || bots[0];
-  const userAvatar = "https://avatar.iran.liara.run/public/10";
+  const bot = allBots.find((b) => b.name === debateData.botName) || allBots[0];
+  const userAvatar =
+    user?.avatarUrl || "https://avatar.iran.liara.run/public/10";
 
   // Initialize SpeechRecognition
   useEffect(() => {
@@ -263,9 +340,16 @@ const DebateRoom: React.FC = () => {
           if (prev.timer <= 1) {
             clearInterval(timerRef.current!);
             if (!prev.isBotTurn) {
-              sendMessage();
+              if (isRecognizing) stopRecognition();
+              setPopup({
+                show: true,
+                message: "Time's up! Moving to the next turn.",
+              });
+              setTimeout(() => setPopup({ show: false, message: "" }), 2000);
+              const updatedState = { ...prev, timer: 0 };
+              advanceTurn(updatedState);
+              return updatedState;
             } else {
-              // For bot turn, set nextTurnPending instead of advancing immediately
               setNextTurnPending(true);
               return { ...prev, timer: 0 };
             }
@@ -277,7 +361,7 @@ const DebateRoom: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [state.timer, state.isDebateEnded, state.isBotTurn, finalInput]);
+  }, [state.timer, state.isDebateEnded, state.isBotTurn, isRecognizing]);
 
   useEffect(() => {
     if (state.isBotTurn && !state.isDebateEnded && !botTurnRef.current) {
@@ -421,11 +505,10 @@ const DebateRoom: React.FC = () => {
         messages: [...prev.messages, botMessage],
       }));
 
-      // Set nextTurnPending to true instead of advancing turn
       setNextTurnPending(true);
     } catch (error) {
       console.error("Bot error:", error);
-      setNextTurnPending(true); // Allow user to advance even if bot fails
+      setNextTurnPending(true);
     } finally {
       botTurnRef.current = false;
     }
@@ -594,8 +677,10 @@ const DebateRoom: React.FC = () => {
               <div className="text-sm font-medium text-gray-800">
                 {debateData.botName}
               </div>
-              <div className="text-xs text-gray-500">{bot.level}</div>
               <div className="text-xs text-gray-500">{bot.desc}</div>
+              <div className="text-xs text-gray-500">
+                {bot.rating ? `Rating: ${bot.rating}` : "Ready to argue!"}
+              </div>
             </div>
             {nextTurnPending && (
               <Button
@@ -637,9 +722,15 @@ const DebateRoom: React.FC = () => {
               />
             </div>
             <div className="flex flex-col">
-              <div className="text-sm font-medium text-gray-800">You</div>
-              <div className="text-xs text-gray-500">Debater</div>
-              <div className="text-xs text-gray-500">Ready to argue!</div>
+              <div className="text-sm font-medium text-gray-800">
+                {user?.displayName || "You"}
+              </div>
+              <div className="text-xs text-gray-500">
+                {user?.bio || "Debater"}
+              </div>
+              <div className="text-xs text-gray-500">
+                {user?.rating ? `Rating: ${user.rating}` : "Ready to argue!"}
+              </div>
             </div>
           </div>
           <div className="p-3 flex-1 overflow-y-auto">
@@ -709,7 +800,7 @@ const DebateRoom: React.FC = () => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes glow {
           0% {
             box-shadow: 0 0 5px rgba(255, 149, 0, 0.5);
