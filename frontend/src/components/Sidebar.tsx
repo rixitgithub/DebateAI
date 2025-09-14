@@ -34,11 +34,6 @@ function Sidebar() {
           icon={<MessageSquare className='mr-3 h-4 w-4' />}
         />
         <NavItem
-          to='/play-online'
-          label='Play Online'
-          icon={<Users className='mr-3 h-4 w-4' />}
-        />
-        <NavItem
           to='/tournaments'
           label='Tournaments'
           icon={<Trophy className='mr-3 h-4 w-4' />}

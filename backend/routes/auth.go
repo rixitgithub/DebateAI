@@ -33,3 +33,7 @@ func VerifyForgotPasswordRouteHandler(c *gin.Context) {
 func VerifyTokenRouteHandler(c *gin.Context) {
 	controllers.VerifyToken(c)
 }
+
+func GetMatchmakingPoolStatusHandler(c *gin.Context) {
+	controllers.GetMatchmakingPoolStatus(c)
+}

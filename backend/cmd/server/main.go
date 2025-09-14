@@ -80,6 +80,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	router.POST("/forgotPassword", routes.ForgotPasswordRouteHandler)
 	router.POST("/confirmForgotPassword", routes.VerifyForgotPasswordRouteHandler)
 	router.POST("/verifyToken", routes.VerifyTokenRouteHandler)
+	
+	// Debug endpoint for matchmaking pool status
+	router.GET("/debug/matchmaking-pool", routes.GetMatchmakingPoolStatusHandler)
 
 	// WebSocket routes (handle auth internally)
 	router.GET("/ws/matchmaking", websocket.MatchmakingHandler)
@@ -94,10 +97,13 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		auth.POST("/debate/result", routes.UpdateRatingAfterDebateRouteHandler) 
 		routes.SetupDebateVsBotRoutes(auth)
 
-		// WebSocket signaling endpoint
-		auth.GET("/ws", websocket.WebsocketHandler)
+		// WebSocket signaling endpoint (handles auth internally)
+		router.GET("/ws", websocket.WebsocketHandler)
 
+		// Set up transcript routes
 		routes.SetupTranscriptRoutes(auth)
+		log.Println("Transcript routes registered")
+		
 		auth.GET("/coach/strengthen-argument/weak-statement", routes.GetWeakStatement)
 		auth.POST("/coach/strengthen-argument/evaluate", routes.EvaluateStrengthenedArgument)
 
@@ -105,8 +111,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		auth.GET("/rooms", routes.GetRoomsHandler)
 		auth.POST("/rooms", routes.CreateRoomHandler)
 		auth.POST("/rooms/:id/join", routes.JoinRoomHandler)
+		auth.GET("/rooms/:id/participants", routes.GetRoomParticipantsHandler)
 
-		auth.GET("/chat/:roomId", websocket.RoomChatHandler)
+		// Chat functionality is now handled by the main WebSocket handler
 
 		auth.GET("/coach/pros-cons/topic", routes.GetProsConsTopic)
 		auth.POST("/coach/pros-cons/submit", routes.SubmitProsCons)

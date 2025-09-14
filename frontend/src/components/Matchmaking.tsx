@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAtom } from 'jotai';
 import Avatar from 'react-avatar';
-import { userAtom } from '../state/userAtom';
+import { useUser } from '../hooks/useUser';
 
 interface MatchmakingPool {
   userId: string;
@@ -12,6 +11,7 @@ interface MatchmakingPool {
   maxElo: number;
   joinedAt: string;
   lastActivity: string;
+  startedMatchmaking: boolean;
 }
 
 interface MatchmakingMessage {
@@ -29,12 +29,18 @@ const Matchmaking: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isInPool, setIsInPool] = useState(false);
   const [waitTime, setWaitTime] = useState(0);
-  const [user] = useAtom(userAtom);
+  const { user, isLoading } = useUser();
   const wsRef = useRef<WebSocket | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     // Check if user is logged in
+
+    // If still loading, wait
+    if (isLoading) {
+      return;
+    }
+
     if (!user) {
       console.log('No user found, redirecting to login');
       navigate('/login');
@@ -76,7 +82,7 @@ const Matchmaking: React.FC = () => {
 
             // Check if current user is in pool
             const currentUser = poolData.find(
-              (p) => p.username === user.displayName
+              (p) => p.userId === user.id || p.username === user.displayName
             );
             setIsInPool(!!currentUser);
           }
@@ -85,8 +91,14 @@ const Matchmaking: React.FC = () => {
         case 'room_created':
           if (message.roomId) {
             // Navigate to the created room
+            console.log('Room created, navigating to:', message.roomId);
             navigate(`/debate-room/${message.roomId}`);
           }
+          break;
+
+        case 'error':
+          console.error('Matchmaking error:', message.error);
+          // Handle error appropriately
           break;
 
         default:
@@ -96,6 +108,7 @@ const Matchmaking: React.FC = () => {
 
     ws.onclose = (event) => {
       setIsConnected(false);
+      setIsInPool(false);
       console.log(
         '🔌 Disconnected from matchmaking WebSocket:',
         event.code,
@@ -113,7 +126,7 @@ const Matchmaking: React.FC = () => {
         wsRef.current.close();
       }
     };
-  }, [navigate, user]);
+  }, [navigate, user, isLoading]);
 
   const joinPool = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -161,10 +174,22 @@ const Matchmaking: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Show loading state while auth is loading
+  if (isLoading || !user) {
+    return (
+      <div className='flex items-center justify-center py-12'>
+        <div className='text-center'>
+          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4'></div>
+          <p className='text-muted-foreground'>Loading user data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className='matchmaking p-6 bg-card rounded-lg shadow-2xl max-w-4xl mx-auto'>
-      <div className='flex justify-between items-center mb-6'>
-        <h2 className='text-3xl font-bold text-foreground'>
+    <div className='space-y-6'>
+      <div className='flex justify-between items-center'>
+        <h2 className='text-2xl font-bold text-foreground'>
           Online Matchmaking
         </h2>
         <div className='flex items-center gap-4'>
@@ -256,7 +281,7 @@ const Matchmaking: React.FC = () => {
 
                 <div className='text-right'>
                   <div className='text-sm text-muted-foreground'>
-                    Waiting:{' '}
+                    Searching:{' '}
                     {formatWaitTime(
                       Math.floor(
                         (Date.now() - new Date(player.joinedAt).getTime()) /
@@ -280,13 +305,14 @@ const Matchmaking: React.FC = () => {
           How Matchmaking Works
         </h4>
         <ul className='text-sm text-muted-foreground space-y-1'>
+          <li>• Click "Start Matchmaking" to join the search queue</li>
           <li>
             • Players are matched based on Elo rating similarity (±200 points by
             default)
           </li>
           <li>
             • Wait time is considered to prioritize players who have been
-            waiting longer
+            searching longer
           </li>
           <li>
             • Matches are created automatically when compatible opponents are

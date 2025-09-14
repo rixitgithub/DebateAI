@@ -11,7 +11,6 @@ import (
 	"arguehub/db"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // MatchmakingPool represents a user in the matchmaking queue
@@ -23,6 +22,7 @@ type MatchmakingPool struct {
 	MaxElo       int       `json:"maxElo" bson:"maxElo"`
 	JoinedAt     time.Time `json:"joinedAt" bson:"joinedAt"`
 	LastActivity time.Time `json:"lastActivity" bson:"lastActivity"`
+	StartedMatchmaking bool `json:"startedMatchmaking" bson:"startedMatchmaking"`
 }
 
 // MatchmakingService handles the matchmaking logic
@@ -43,11 +43,12 @@ func GetMatchmakingService() *MatchmakingService {
 			pool: make(map[string]*MatchmakingPool),
 		}
 		go matchmakingService.cleanupInactiveUsers()
+		go matchmakingService.periodicMatchmaking()
 	})
 	return matchmakingService
 }
 
-// AddToPool adds a user to the matchmaking pool
+// AddToPool adds a user to the matchmaking pool (but doesn't start matchmaking yet)
 func (ms *MatchmakingService) AddToPool(userID, username string, elo int) error {
 	ms.mutex.Lock()
 	defer ms.mutex.Unlock()
@@ -65,14 +66,30 @@ func (ms *MatchmakingService) AddToPool(userID, username string, elo int) error 
 		MaxElo:       maxElo,
 		JoinedAt:     time.Now(),
 		LastActivity: time.Now(),
+		StartedMatchmaking: false, // Default to false
 	}
 
 	ms.pool[userID] = poolEntry
-	log.Printf("User %s (Elo: %d) added to matchmaking pool", username, elo)
-
-	// Try to find a match immediately
-	go ms.findMatch(userID)
+	log.Printf("User %s (Elo: %d) added to matchmaking pool (not started yet)", username, elo)
 	return nil
+}
+
+// StartMatchmaking starts the matchmaking process for a user
+func (ms *MatchmakingService) StartMatchmaking(userID string) error {
+	ms.mutex.Lock()
+	defer ms.mutex.Unlock()
+	
+	if poolEntry, exists := ms.pool[userID]; exists {
+		poolEntry.StartedMatchmaking = true
+		poolEntry.JoinedAt = time.Now() // Reset join time when actually starting
+		poolEntry.LastActivity = time.Now()
+		log.Printf("User %s started matchmaking", poolEntry.Username)
+		
+		// Try to find a match immediately
+		go ms.findMatch(userID)
+		return nil
+	}
+	return fmt.Errorf("user not found in pool")
 }
 
 // RemoveFromPool removes a user from the matchmaking pool
@@ -103,7 +120,9 @@ func (ms *MatchmakingService) GetPool() []*MatchmakingPool {
 	
 	pool := make([]*MatchmakingPool, 0, len(ms.pool))
 	for _, entry := range ms.pool {
-		pool = append(pool, entry)
+		if entry.StartedMatchmaking { // Only include users who have started matchmaking
+			pool = append(pool, entry)
+		}
 	}
 	return pool
 }
@@ -126,6 +145,11 @@ func (ms *MatchmakingService) findMatch(userID string) {
 	for _, opponent := range ms.pool {
 		if opponent.UserID == userID {
 			continue // Skip self
+		}
+
+		// Only consider opponents who have started matchmaking
+		if !opponent.StartedMatchmaking {
+			continue
 		}
 
 		// Check if Elo ranges overlap
@@ -157,7 +181,7 @@ func (ms *MatchmakingService) createRoomForMatch(user1, user2 *MatchmakingPool) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	roomCollection := db.MongoClient.Database("DebateAI").Collection("rooms")
+	roomCollection := db.MongoDatabase.Collection("rooms")
 	
 	// Generate room ID
 	roomID := generateRoomID()
@@ -182,16 +206,8 @@ func (ms *MatchmakingService) createRoomForMatch(user1, user2 *MatchmakingPool) 
 		"status":    "waiting", // waiting, active, completed
 	}
 
-	// Use findOneAndUpdate to atomically create the room
-	opts := options.FindOneAndUpdate().SetUpsert(true)
-	var result bson.M
-	err := roomCollection.FindOneAndUpdate(
-		ctx,
-		bson.M{"_id": roomID},
-		bson.M{"$setOnInsert": room},
-		opts,
-	).Decode(&result)
-
+	// Insert the room directly
+	_, err := roomCollection.InsertOne(ctx, room)
 	if err != nil {
 		log.Printf("Failed to create room for match: %v", err)
 		return
@@ -205,8 +221,11 @@ func (ms *MatchmakingService) createRoomForMatch(user1, user2 *MatchmakingPool) 
 		roomID, user1.Username, user1.Elo, user2.Username, user2.Elo)
 
 	// Broadcast room creation to WebSocket clients
-	// This will be handled by the WebSocket handler when it detects the new room
-	log.Printf("Room %s created successfully, broadcasting to WebSocket clients", roomID)
+	participantUserIDs := []string{user1.UserID, user2.UserID}
+	if roomCreatedCallback != nil {
+		roomCreatedCallback(roomID, participantUserIDs)
+	}
+	log.Printf("Room %s created successfully for users %s and %s", roomID, user1.UserID, user2.UserID)
 }
 
 // cleanupInactiveUsers removes users who have been inactive for too long
@@ -232,4 +251,37 @@ func (ms *MatchmakingService) cleanupInactiveUsers() {
 func generateRoomID() string {
 	// Simple implementation - in production, ensure uniqueness
 	return fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+}
+
+// RoomCreatedCallback is a function type for notifying when a room is created
+type RoomCreatedCallback func(roomID string, participantUserIDs []string)
+
+// Global callback for room creation notifications
+var roomCreatedCallback RoomCreatedCallback
+
+// SetRoomCreatedCallback sets the callback function for room creation notifications
+func SetRoomCreatedCallback(callback RoomCreatedCallback) {
+	roomCreatedCallback = callback
+}
+
+// periodicMatchmaking runs periodically to find matches for waiting users
+func (ms *MatchmakingService) periodicMatchmaking() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		ms.mutex.RLock()
+		var usersToMatch []string
+		for userID, poolEntry := range ms.pool {
+			if poolEntry.StartedMatchmaking {
+				usersToMatch = append(usersToMatch, userID)
+			}
+		}
+		ms.mutex.RUnlock()
+
+		// Try to find matches for each user
+		for _, userID := range usersToMatch {
+			go ms.findMatch(userID)
+		}
+	}
 }

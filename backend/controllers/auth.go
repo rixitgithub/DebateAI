@@ -12,6 +12,7 @@ import (
 	"arguehub/config"
 	"arguehub/db"
 	"arguehub/models"
+	"arguehub/services"
 	"arguehub/structs"
 	"arguehub/utils"
 
@@ -549,4 +550,16 @@ func loadConfig(ctx *gin.Context) *config.Config {
 		return nil
 	}
 	return cfg
+}
+
+// GetMatchmakingPoolStatus returns the current matchmaking pool status (debug endpoint)
+func GetMatchmakingPoolStatus(ctx *gin.Context) {
+	matchmakingService := services.GetMatchmakingService()
+	pool := matchmakingService.GetPool()
+	
+	ctx.JSON(200, gin.H{
+		"pool":        pool,
+		"poolSize":    len(pool),
+		"timestamp":   time.Now().Format(time.RFC3339),
+	})
 }

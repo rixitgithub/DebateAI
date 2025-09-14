@@ -28,6 +28,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   CalendarIcon,
   CheckCircle,
   XCircle,
@@ -42,6 +48,7 @@ import {
   Pen,
   X,
   Image as ImageIcon,
+  ChevronRight,
 } from "lucide-react";
 import { format, isSameDay, subDays } from "date-fns";
 import defaultAvatar from "@/assets/avatar2.jpg";
@@ -66,6 +73,11 @@ import { getProfile, updateProfile } from "@/services/profileService";
 import { getAuthToken } from "@/utils/auth";
 import { DateRange } from "react-day-picker";
 import AvatarModal from "../components/AvatarModal";
+import SavedTranscripts from "../components/SavedTranscripts";
+import {
+  transcriptService,
+  SavedDebateTranscript,
+} from "@/services/transcriptService";
 
 interface ProfileData {
   displayName: string;
@@ -96,8 +108,19 @@ interface StatData {
   wins: number;
   losses: number;
   draws: number;
+  winRate?: number;
+  totalDebates?: number;
   eloHistory: { elo: number; date: string }[];
   debateHistory: DebateResult[] | null;
+  recentDebates?: Array<{
+    id: string;
+    topic: string;
+    result: "win" | "loss" | "draw" | "pending";
+    opponent: string;
+    debateType: "user_vs_bot" | "user_vs_user";
+    date: string;
+    eloChange?: number;
+  }>;
 }
 
 interface DashboardData {
@@ -116,6 +139,31 @@ const Profile: React.FC = () => {
     "7days" | "30days" | "all" | "custom"
   >("all");
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [debateStatsLoading, setDebateStatsLoading] = useState(true);
+  const [recentDebates, setRecentDebates] = useState<
+    Array<{
+      id: string;
+      topic: string;
+      result: "win" | "loss" | "draw" | "pending";
+      opponent: string;
+      debateType: "user_vs_bot" | "user_vs_user";
+      date: string;
+      eloChange?: number;
+    }>
+  >([]);
+  const [selectedDebate, setSelectedDebate] = useState<{
+    id: string;
+    topic: string;
+    result: "win" | "loss" | "draw" | "pending";
+    opponent: string;
+    debateType: "user_vs_bot" | "user_vs_user";
+    date: string;
+    eloChange?: number;
+  } | null>(null);
+  const [isDebateDialogOpen, setIsDebateDialogOpen] = useState(false);
+  const [fullTranscript, setFullTranscript] =
+    useState<SavedDebateTranscript | null>(null);
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
 
   const [customDateRange, setCustomDateRange] = useState<DateRange>({
     from: undefined,
@@ -135,6 +183,12 @@ const Profile: React.FC = () => {
       try {
         const data = await getProfile(token);
         setDashboard(data);
+
+        // Extract recent debates from profile data
+        if (data.stats && data.stats.recentDebates) {
+          setRecentDebates(data.stats.recentDebates);
+          setDebateStatsLoading(false);
+        }
       } catch (err) {
         setErrorMessage("Failed to load dashboard data.");
         console.error(err);
@@ -145,6 +199,30 @@ const Profile: React.FC = () => {
 
     fetchDashboard();
   }, []);
+
+  const handleDebateClick = async (debate: {
+    id: string;
+    topic: string;
+    result: "win" | "loss" | "draw" | "pending";
+    opponent: string;
+    debateType: "user_vs_bot" | "user_vs_user";
+    date: string;
+    eloChange?: number;
+  }) => {
+    setSelectedDebate(debate);
+    setIsDebateDialogOpen(true);
+    setTranscriptLoading(true);
+
+    try {
+      // Fetch the transcript directly by ID
+      const transcript = await transcriptService.getTranscriptById(debate.id);
+      setFullTranscript(transcript);
+    } catch (err) {
+      console.error("Failed to fetch full transcript:", err);
+    } finally {
+      setTranscriptLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (editingField === "displayName" && inputRef.current) {
@@ -398,14 +476,28 @@ const Profile: React.FC = () => {
   const { profile, leaderboard, stats } = dashboard;
 
   const donutChartData = [
-    { label: "Losses", value: stats.losses, fill: "hsl(var(--chart-1))" },
-    { label: "Wins", value: stats.wins, fill: "hsl(var(--chart-2))" },
-    { label: "Draws", value: stats.draws, fill: "hsl(var(--chart-3))" },
+    {
+      label: "Losses",
+      value: stats.losses,
+      fill: "hsl(var(--chart-1))",
+    },
+    {
+      label: "Wins",
+      value: stats.wins,
+      fill: "hsl(var(--chart-2))",
+    },
+    {
+      label: "Draws",
+      value: stats.draws,
+      fill: "hsl(var(--chart-3))",
+    },
   ];
   const totalMatches = donutChartData.reduce(
     (acc, curr) => acc + curr.value,
     0
   );
+
+  // Use real win rate from dashboard stats if available
 
   const donutChartConfig: ChartConfig = {
     value: { label: "Matches" },
@@ -941,9 +1033,16 @@ const Profile: React.FC = () => {
             </CardHeader>
             <Separator />
             <CardContent className="p-2 flex-1 overflow-y-auto">
-              {stats.debateHistory && stats.debateHistory.length > 0 ? (
+              {debateStatsLoading ? (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Loading debate history...
+                  </p>
+                </div>
+              ) : recentDebates && recentDebates.length > 0 ? (
                 <ul className="space-y-1">
-                  {[...stats.debateHistory].reverse().map((debate, idx) => {
+                  {recentDebates.map((debate, idx) => {
                     const IconComponent =
                       debate.result === "win"
                         ? CheckCircle
@@ -959,7 +1058,8 @@ const Profile: React.FC = () => {
                     return (
                       <li
                         key={idx}
-                        className="flex items-center justify-between border-b border-muted py-1 last:border-none text-xs sm:text-sm hover:bg-muted/50 transition-colors"
+                        className="flex items-center justify-between border-b border-muted py-1 last:border-none text-xs sm:text-sm hover:bg-muted/50 transition-colors cursor-pointer group"
+                        onClick={() => handleDebateClick(debate)}
                       >
                         <span className="font-medium flex items-center truncate">
                           <IconComponent
@@ -967,10 +1067,17 @@ const Profile: React.FC = () => {
                           />
                           <span className="truncate">{debate.topic}</span>
                         </span>
-                        <span className={`${iconColor} font-semibold text-xs`}>
+                        <span
+                          className={`${iconColor} font-semibold text-xs flex items-center gap-1`}
+                        >
                           {debate.result.toUpperCase()}{" "}
-                          {debate.eloChange > 0 && `(+${debate.eloChange})`}
-                          {debate.eloChange < 0 && `(${debate.eloChange})`}
+                          {debate.eloChange &&
+                            debate.eloChange > 0 &&
+                            `(+${debate.eloChange})`}
+                          {debate.eloChange &&
+                            debate.eloChange < 0 &&
+                            `(${debate.eloChange})`}
+                          <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </span>
                       </li>
                     );
@@ -995,7 +1102,190 @@ const Profile: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Saved Debate Transcripts Section */}
+        <div data-section="saved-transcripts">
+          <SavedTranscripts />
+        </div>
       </div>
+
+      {/* Debate Details Dialog */}
+      <Dialog open={isDebateDialogOpen} onOpenChange={setIsDebateDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Award className="w-5 h-5" />
+              Debate Details
+            </DialogTitle>
+          </DialogHeader>
+          {selectedDebate && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-semibold">Topic:</span>
+                  <p className="text-muted-foreground">
+                    {selectedDebate.topic}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-semibold">Opponent:</span>
+                  <p className="text-muted-foreground">
+                    {selectedDebate.opponent}
+                    {selectedDebate.debateType === "user_vs_bot" && (
+                      <span className="ml-1 text-xs bg-blue-100 text-blue-800 px-1 rounded">
+                        Bot
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-semibold">Type:</span>
+                  <p className="text-muted-foreground capitalize">
+                    {selectedDebate.debateType.replace("_", " ")}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-semibold">Result:</span>
+                  <div className="flex items-center gap-1">
+                    {selectedDebate.result === "win" ? (
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                    ) : selectedDebate.result === "loss" ? (
+                      <XCircle className="w-4 h-4 text-red-600" />
+                    ) : (
+                      <MinusCircle className="w-4 h-4 text-gray-600" />
+                    )}
+                    <span className="text-muted-foreground capitalize">
+                      {selectedDebate.result}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span className="font-semibold">Date:</span>
+                  <p className="text-muted-foreground">
+                    {format(new Date(selectedDebate.date), "PPP")}
+                  </p>
+                </div>
+                <div>
+                  <span className="font-semibold">Elo Change:</span>
+                  <p className="text-muted-foreground">
+                    {selectedDebate.eloChange || 0}
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h4 className="font-semibold mb-3">Debate Summary</h4>
+                <p className="text-sm text-muted-foreground">
+                  This debate was a{" "}
+                  {selectedDebate.debateType.replace("_", " ")} debate about "
+                  {selectedDebate.topic}" against {selectedDebate.opponent}. The
+                  result was a {selectedDebate.result}.
+                  {selectedDebate.eloChange &&
+                    selectedDebate.eloChange !== 0 && (
+                      <span>
+                        {" "}
+                        Your Elo rating changed by{" "}
+                        {selectedDebate.eloChange > 0 ? "+" : ""}
+                        {selectedDebate.eloChange}.
+                      </span>
+                    )}
+                </p>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h4 className="font-semibold mb-3">Your Performance</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="text-2xl font-bold text-primary">
+                      {dashboard?.stats?.totalDebates || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Total Debates
+                    </div>
+                  </div>
+                  <div className="text-center p-3 bg-muted/50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {dashboard?.stats?.winRate?.toFixed(1) || 0}%
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Win Rate
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {transcriptLoading ? (
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">
+                    Loading transcript...
+                  </p>
+                </div>
+              ) : fullTranscript ? (
+                <div className="space-y-4">
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold mb-3">Full Conversation</h4>
+                    <div className="max-h-64 overflow-y-auto border rounded-lg p-3 space-y-3">
+                      {fullTranscript.messages.map((message, index: number) => (
+                        <div
+                          key={index}
+                          className={`flex gap-3 ${
+                            message.sender === "User"
+                              ? "justify-end"
+                              : "justify-start"
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg p-3 ${
+                              message.sender === "User"
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-medium">
+                                {message.sender}
+                              </span>
+                              {message.phase && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">
+                                  {message.phase}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap">
+                              {message.text}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Full transcript not available
+                  </p>
+                </div>
+              )}
+
+              <div className="text-center">
+                <Button
+                  variant="outline"
+                  onClick={() => (window.location.href = "/debates")}
+                >
+                  Start New Debate
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

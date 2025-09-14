@@ -14,6 +14,7 @@ import BotSelection from './Pages/BotSelection';
 import DebateRoom from './Pages/DebateRoom';
 import OnlineDebateRoom from './Pages/OnlineDebateRoom';
 import StrengthenArgument from './Pages/StrengthenArgument';
+import SpeechTest from './Pages/SpeechTest';
 // Layout
 import Layout from './components/Layout';
 import CoachPage from './Pages/CoachPage';
@@ -21,7 +22,6 @@ import ChatRoom from './components/ChatRoom';
 import TournamentHub from './Pages/TournamentHub';
 import TournamentDetails from './Pages/TournamentDetails';
 import ProsConsChallenge from './Pages/ProsConsChallenge';
-import PlayOnline from './Pages/PlayOnline';
 
 // Protects routes based on authentication status
 function ProtectedRoute() {
@@ -79,11 +79,11 @@ function AppRoutes() {
           />{' '}
           {/* Add this route */}
           <Route path='coach/pros-cons' element={<ProsConsChallenge />} />
-          <Route path='play-online' element={<PlayOnline />} />
         </Route>
         <Route path='/debate/:roomId' element={<DebateRoom />} />
         <Route path='/debate-room/:roomId' element={<OnlineDebateRoom />} />
         <Route path='/spectator/:roomId' element={<ChatRoom />} />
+        <Route path='/speech-test' element={<SpeechTest />} />
       </Route>
       {/* Redirect unknown routes */}
       <Route path='*' element={<Navigate to='/' replace />} />

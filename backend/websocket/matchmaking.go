@@ -79,15 +79,15 @@ func MatchmakingHandler(c *gin.Context) {
 	log.Printf("Token validated successfully for user: %s", email)
 
 	// Get user details from database
-	userCollection := db.MongoClient.Database("DebateAI").Collection("users")
+	userCollection := db.MongoDatabase.Collection("users")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	var user struct {
-		ID          string `bson:"_id"`
-		Email       string `bson:"email"`
-		DisplayName string `bson:"displayName"`
-		Rating      int    `bson:"eloRating"`
+		ID          string  `bson:"_id"`
+		Email       string  `bson:"email"`
+		DisplayName string  `bson:"displayName"`
+		Rating      float64 `bson:"rating"`
 	}
 
 	err = userCollection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
@@ -95,6 +95,12 @@ func MatchmakingHandler(c *gin.Context) {
 		log.Printf("User not found in database: %v", err)
 		c.String(http.StatusNotFound, "User not found")
 		return
+	}
+
+	// Calculate user rating with default fallback
+	userRating := int(user.Rating)
+	if userRating == 0 {
+		userRating = 1200 // Default rating if user has no rating
 	}
 
 	// Upgrade the connection to WebSocket
@@ -109,7 +115,7 @@ func MatchmakingHandler(c *gin.Context) {
 		conn:     conn,
 		userID:   user.ID,
 		username: user.DisplayName,
-		elo:      user.Rating,
+		elo:      userRating,
 		send:     make(chan []byte, 256),
 	}
 
@@ -118,15 +124,20 @@ func MatchmakingHandler(c *gin.Context) {
 	matchmakingRoom.clients[client] = true
 	matchmakingRoom.mutex.Unlock()
 
-	// Add user to matchmaking pool
+	// Add user to matchmaking pool (but don't start matchmaking yet)
 	matchmakingService := services.GetMatchmakingService()
-	err = matchmakingService.AddToPool(user.ID, user.DisplayName, user.Rating)
+	err = matchmakingService.AddToPool(user.ID, user.DisplayName, userRating)
 	if err != nil {
 		log.Printf("Failed to add user to matchmaking pool: %v", err)
+		c.String(http.StatusInternalServerError, "Failed to join matchmaking")
+		return
 	}
 
 	// Send initial pool status
 	sendPoolStatus()
+
+	// Set up room creation callback if not already set
+	services.SetRoomCreatedCallback(BroadcastRoomCreated)
 
 	// Start goroutines for reading and writing
 	go client.writePump()
@@ -173,9 +184,12 @@ func (c *MatchmakingClient) readPump() {
 		// Handle different message types
 		switch msg.Type {
 		case "join_pool":
-			// User wants to join matchmaking pool
+			// User wants to start matchmaking
 			matchmakingService := services.GetMatchmakingService()
-			matchmakingService.AddToPool(c.userID, c.username, c.elo)
+			err := matchmakingService.StartMatchmaking(c.userID)
+			if err != nil {
+				log.Printf("Failed to start matchmaking for user %s: %v", c.userID, err)
+			}
 			sendPoolStatus()
 			
 		case "leave_pool":
@@ -301,13 +315,13 @@ func WatchForNewRooms() {
 	// Wait a moment to ensure MongoDB client is initialized
 	time.Sleep(2 * time.Second)
 	
-	// Check if MongoDB client is available
-	if db.MongoClient == nil {
-		log.Printf("MongoDB client not available, skipping room watching")
+	// Check if MongoDB database is available
+	if db.MongoDatabase == nil {
+		log.Printf("MongoDB database not available, skipping room watching")
 		return
 	}
 	
-	roomCollection := db.MongoClient.Database("DebateAI").Collection("rooms")
+	roomCollection := db.MongoDatabase.Collection("rooms")
 	
 	// Create a change stream to watch for new rooms
 	pipeline := []bson.M{

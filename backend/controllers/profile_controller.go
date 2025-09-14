@@ -56,6 +56,25 @@ func GetProfile(c *gin.Context) {
 		return
 	}
 
+	// Fix users with 0 rating by setting them to default rating
+	if user.Rating == 0 {
+		user.Rating = 1200.0
+		user.LastRatingUpdate = time.Now()
+		_, err = db.MongoDatabase.Collection("users").UpdateOne(
+			dbCtx,
+			bson.M{"_id": user.ID},
+			bson.M{"$set": bson.M{
+				"rating":           user.Rating,
+				"lastRatingUpdate": user.LastRatingUpdate,
+			}},
+		)
+		if err != nil {
+			fmt.Printf("Failed to update user rating: %v", err)
+		} else {
+			fmt.Printf("Updated user %s rating from 0 to 1200", email)
+		}
+	}
+
 	displayName := user.DisplayName
 	if displayName == "" {
 		displayName = extractNameFromEmail(user.Email)
@@ -109,40 +128,50 @@ func GetProfile(c *gin.Context) {
 		rank++
 	}
 
-	// Debate history
-	debateCursor, err := db.MongoDatabase.Collection("debates").Find(
+	// Get user ID for transcript queries
+	userID := user.ID
+
+	// Fetch debate statistics from saved transcripts
+	transcriptCursor, err := db.MongoDatabase.Collection("saved_debate_transcripts").Find(
 		dbCtx,
-		bson.M{"email": email},
-		options.Find().SetSort(bson.D{{"date", 1}}),
+		bson.M{"userId": userID},
+		options.Find().SetSort(bson.D{{"createdAt", -1}}), // Most recent first
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch debates"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch debate transcripts"})
 		return
 	}
-	defer debateCursor.Close(dbCtx)
-
-	type DebateDoc struct {
-		Topic        string    `bson:"topic"`
-		Result       string    `bson:"result"`
-		RatingChange float64   `bson:"eloChange"`
-		Rating       float64   `bson:"eloRating"`
-		Date         time.Time `bson:"date"`
-	}
+	defer transcriptCursor.Close(dbCtx)
 
 	var wins, losses, draws int
 	var eloHistory []gin.H
 	var debateHistory []gin.H
+	var recentDebates []gin.H
 
-	for debateCursor.Next(dbCtx) {
-		var doc DebateDoc
-		if err := debateCursor.Decode(&doc); err != nil {
+	for transcriptCursor.Next(dbCtx) {
+		var transcript models.SavedDebateTranscript
+		if err := transcriptCursor.Decode(&transcript); err != nil {
 			continue
 		}
 
-		eloHistory = append(eloHistory, gin.H{"elo": int(doc.Rating), "date": doc.Date})
-		debateHistory = append(debateHistory, gin.H{"topic": doc.Topic, "result": doc.Result, "eloChange": int(doc.RatingChange)})
+		// Add to recent debates (last 10)
+		if len(recentDebates) < 10 {
+			recentDebates = append(recentDebates, gin.H{
+				"id":          transcript.ID.Hex(),
+				"topic":       transcript.Topic,
+				"result":      transcript.Result,
+				"opponent":    transcript.Opponent,
+				"debateType":  transcript.DebateType,
+				"date":        transcript.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				"eloChange":   0, // TODO: Add actual Elo change tracking
+			})
+		}
 
-		switch doc.Result {
+		// Add to Elo history (for chart)
+		eloHistory = append(eloHistory, gin.H{"elo": int(user.Rating), "date": transcript.CreatedAt.Format("2006-01-02T15:04:05Z07:00")})
+
+		// Count results
+		switch transcript.Result {
 		case "win":
 			wins++
 		case "loss":
@@ -150,6 +179,13 @@ func GetProfile(c *gin.Context) {
 		case "draw":
 			draws++
 		}
+	}
+
+	// Calculate win rate
+	winRate := 0.0
+	totalDebates := wins + losses + draws
+	if totalDebates > 0 {
+		winRate = float64(wins) / float64(totalDebates) * 100
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -168,8 +204,11 @@ func GetProfile(c *gin.Context) {
 			"wins":          wins,
 			"losses":        losses,
 			"draws":         draws,
+			"winRate":       winRate,
+			"totalDebates":  totalDebates,
 			"eloHistory":    eloHistory,
 			"debateHistory": debateHistory,
+			"recentDebates": recentDebates,
 		},
 	})
 }

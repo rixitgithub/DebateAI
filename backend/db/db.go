@@ -75,3 +75,19 @@ func UpdateDebateVsBotOutcome(userId, outcome string) error {
 	}
 	return nil
 }
+
+// GetLatestDebateVsBot retrieves the most recent bot debate for a user
+func GetLatestDebateVsBot(email string) (*models.DebateVsBot, error) {
+	filter := bson.M{"email": email}
+	opts := options.FindOne().SetSort(bson.M{"createdAt": -1})
+	
+	var debate models.DebateVsBot
+	err := DebateVsBotCollection.FindOne(context.Background(), filter, opts).Decode(&debate)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("no debate found for user: %s", email)
+		}
+		return nil, err
+	}
+	return &debate, nil
+}

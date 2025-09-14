@@ -143,6 +143,15 @@ func ValidateTokenAndFetchEmail(configPath, token string, c *gin.Context) (bool,
 	return true, email, nil
 }
 
+func GetUserIDFromToken(token string) (string, error) {
+	claims, err := ParseJWTToken(token)
+	if err != nil {
+		return "", err
+	}
+	
+	return claims.UserID, nil
+}
+
 func GenerateSecretHash(username, clientID, clientSecret string) string {
 	key := []byte(clientSecret)
 	message := username + clientID
