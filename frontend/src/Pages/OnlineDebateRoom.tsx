@@ -5,11 +5,7 @@ import { Button } from "../components/ui/button";
 import JudgmentPopup from "@/components/JudgementPopup";
 import SpeechTranscripts from "@/components/SpeechTranscripts";
 import { useUser } from "@/hooks/useUser";
-
-// Utility function to get authentication token
-const getAuthToken = (): string => {
-  return localStorage.getItem("token") || "";
-};
+import { getAuthToken } from "@/utils/auth";
 
 // Define debate phases as an enum
 enum DebatePhase {
@@ -226,13 +222,7 @@ const OnlineDebateRoom: React.FC = () => {
     transcripts: { [key in DebatePhase]?: string }
   ) => {
     const token = getAuthToken();
-    console.log(
-      "-----------------------------------------------------------------------"
-    );
-    console.log(`Attempting to send transcripts for role: ${role}`, {
-      roomId,
-      transcripts,
-    });
+
     try {
       const response = await fetch(`http://localhost:1313/submit-transcripts`, {
         method: "POST",

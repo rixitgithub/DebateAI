@@ -672,6 +672,7 @@ func GetDebateStats(userID primitive.ObjectID) (map[string]interface{}, error) {
 
 		// Add to recent debates
 		recentDebates = append(recentDebates, map[string]interface{}{
+			 "id":         transcript.ID.Hex(),
 			"topic":       transcript.Topic,
 			"result":      transcript.Result,
 			"opponent":    transcript.Opponent,

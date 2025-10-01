@@ -92,7 +92,6 @@ func SaveDebateTranscriptHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Saving transcript for user %s: %+v", userID.Hex(), req)
 	
 	err = services.SaveDebateTranscript(
 		userID,

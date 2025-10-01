@@ -1,19 +1,24 @@
 import React, { useEffect, useRef, useState } from "react";
 
+// Add a type for the SpeechRecognition constructor
+type SpeechRecognitionConstructor = new () => SpeechRecognition;
+
 const SpeechTest: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [status, setStatus] = useState("");
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
-    // Initialize speech recognition
     if ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
+      const SpeechRecognitionCtor = (window.SpeechRecognition ||
+        window.webkitSpeechRecognition) as
+        | SpeechRecognitionConstructor
+        | undefined;
 
+      if (!SpeechRecognitionCtor) return;
+
+      recognitionRef.current = new SpeechRecognitionCtor();
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
       recognitionRef.current.lang = "en-US";
@@ -24,7 +29,7 @@ const SpeechTest: React.FC = () => {
         setStatus("Listening...");
       };
 
-      recognitionRef.current.onresult = (event: any) => {
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
         let interimTranscript = "";
         let finalTranscript = "";
 
@@ -52,16 +57,27 @@ const SpeechTest: React.FC = () => {
         setStatus("Stopped listening");
       };
 
-      recognitionRef.current.onerror = (event: any) => {
-        console.error("Speech recognition error:", event.error);
+      recognitionRef.current.onerror = (event) => {
+        const errorEvent = event as SpeechRecognitionErrorEvent;
+        console.error("Speech recognition error:", errorEvent.error);
         setIsListening(false);
-        setStatus(`Error: ${event.error}`);
+        setStatus(`Error: ${errorEvent.error}`);
       };
 
       console.log("Speech recognition initialized");
     } else {
       setStatus("Speech recognition not supported");
     }
+
+    // Cleanup on unmount
+    return () => {
+      try {
+        recognitionRef.current?.stop();
+      } catch (err) {
+        console.warn("Error stopping recognition during cleanup:", err);
+      }
+      recognitionRef.current = null;
+    };
   }, []);
 
   const startListening = () => {

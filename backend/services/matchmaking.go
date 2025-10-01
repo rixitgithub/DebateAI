@@ -114,14 +114,14 @@ func (ms *MatchmakingService) UpdateActivity(userID string) {
 }
 
 // GetPool returns a copy of the current matchmaking pool
-func (ms *MatchmakingService) GetPool() []*MatchmakingPool {
+func (ms *MatchmakingService) GetPool() []MatchmakingPool {
 	ms.mutex.RLock()
 	defer ms.mutex.RUnlock()
 	
-	pool := make([]*MatchmakingPool, 0, len(ms.pool))
+	pool := make([]MatchmakingPool, 0, len(ms.pool))
 	for _, entry := range ms.pool {
 		if entry.StartedMatchmaking { // Only include users who have started matchmaking
-			pool = append(pool, entry)
+			pool = append(pool, *entry)
 		}
 	}
 	return pool
@@ -129,29 +129,23 @@ func (ms *MatchmakingService) GetPool() []*MatchmakingPool {
 
 // findMatch attempts to find a suitable opponent for the given user
 func (ms *MatchmakingService) findMatch(userID string) {
-	ms.mutex.RLock()
+	ms.mutex.Lock()
 	user, exists := ms.pool[userID]
-	if !exists {
-		ms.mutex.RUnlock()
+	if !exists || !user.StartedMatchmaking {
+		ms.mutex.Unlock()
 		return
 	}
-	ms.mutex.RUnlock()
-
 	// Find potential opponents
 	var bestMatch *MatchmakingPool
-	var bestScore float64 = -1
-
-	ms.mutex.RLock()
+	bestScore := math.Inf(1)
 	for _, opponent := range ms.pool {
 		if opponent.UserID == userID {
 			continue // Skip self
 		}
-
 		// Only consider opponents who have started matchmaking
 		if !opponent.StartedMatchmaking {
 			continue
 		}
-
 		// Check if Elo ranges overlap
 		if user.MinElo <= opponent.MaxElo && user.MaxElo >= opponent.MinElo {
 			// Calculate match quality score (lower is better)
@@ -167,12 +161,17 @@ func (ms *MatchmakingService) findMatch(userID string) {
 			}
 		}
 	}
-	ms.mutex.RUnlock()
-
+	// Reserve/remove both under lock to avoid duplicate room creation
 	if bestMatch != nil {
-		// Create a room for these two users
-		ms.createRoomForMatch(user, bestMatch)
+		delete(ms.pool, user.UserID)
+		delete(ms.pool, bestMatch.UserID)
+		// Capture locals and unlock before I/O
+		u1, u2 := user, bestMatch
+		ms.mutex.Unlock()
+		ms.createRoomForMatch(u1, u2)
+		return
 	}
+	ms.mutex.Unlock()
 }
 
 // createRoomForMatch creates a room for two matched users
@@ -183,8 +182,19 @@ func (ms *MatchmakingService) createRoomForMatch(user1, user2 *MatchmakingPool) 
 
 	roomCollection := db.MongoDatabase.Collection("rooms")
 	
-	// Generate room ID
-	roomID := generateRoomID()
+	roomID := generateRoomID() // Generate room ID (see ID strategy comment below)
+	// If DB is not initialized, skip persistence but still complete the match.
+	if db.MongoDatabase == nil {
+		log.Printf("MongoDatabase is nil; skipping room persistence for %s vs %s", user1.UserID, user2.UserID)
+		ms.RemoveFromPool(user1.UserID)
+		ms.RemoveFromPool(user2.UserID)
+		if roomCreatedCallback != nil {
+			roomCreatedCallback(roomID, []string{user1.UserID, user2.UserID})
+		}
+		log.Printf("Room %s created (in-memory only) for users %s and %s", roomID, user1.UserID, user2.UserID)
+		return
+	}
+	roomCollection := db.MongoDatabase.Collection("rooms")
 	
 	// Create room with both participants
 	room := bson.M{
@@ -205,12 +215,10 @@ func (ms *MatchmakingService) createRoomForMatch(user1, user2 *MatchmakingPool) 
 		"createdAt": time.Now(),
 		"status":    "waiting", // waiting, active, completed
 	}
-
 	// Insert the room directly
 	_, err := roomCollection.InsertOne(ctx, room)
 	if err != nil {
-		log.Printf("Failed to create room for match: %v", err)
-		return
+		log.Printf("Failed to persist room %s: %v (continuing with match)", roomID, err)
 	}
 
 	// Remove both users from the pool

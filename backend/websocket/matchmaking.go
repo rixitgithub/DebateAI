@@ -84,7 +84,7 @@ func MatchmakingHandler(c *gin.Context) {
 	defer cancel()
 
 	var user struct {
-		ID          string  `bson:"_id"`
+		ID          primitive.ObjectID `bson:"_id"`
 		Email       string  `bson:"email"`
 		DisplayName string  `bson:"displayName"`
 		Rating      float64 `bson:"rating"`
@@ -113,7 +113,7 @@ func MatchmakingHandler(c *gin.Context) {
 	// Create client
 	client := &MatchmakingClient{
 		conn:     conn,
-		userID:   user.ID,
+		userID:   user.ID.Hex(),
 		username: user.DisplayName,
 		elo:      userRating,
 		send:     make(chan []byte, 256),
@@ -126,7 +126,7 @@ func MatchmakingHandler(c *gin.Context) {
 
 	// Add user to matchmaking pool (but don't start matchmaking yet)
 	matchmakingService := services.GetMatchmakingService()
-	err = matchmakingService.AddToPool(user.ID, user.DisplayName, userRating)
+	err = matchmakingService.AddToPool(user.ID.Hex(), user.DisplayName, userRating)
 	if err != nil {
 		log.Printf("Failed to add user to matchmaking pool: %v", err)
 		c.String(http.StatusInternalServerError, "Failed to join matchmaking")
@@ -267,7 +267,7 @@ func sendPoolStatus() {
 		return
 	}
 
-	matchmakingRoom.mutex.RLock()
+	matchmakingRoom.mutex.Lock()
 	for client := range matchmakingRoom.clients {
 		select {
 		case client.send <- messageData:
@@ -276,7 +276,7 @@ func sendPoolStatus() {
 			delete(matchmakingRoom.clients, client)
 		}
 	}
-	matchmakingRoom.mutex.RUnlock()
+	matchmakingRoom.mutex.Unlock()
 }
 
 // BroadcastRoomCreated sends a notification when a new room is created
@@ -292,7 +292,7 @@ func BroadcastRoomCreated(roomID string, participantUserIDs []string) {
 		return
 	}
 
-	matchmakingRoom.mutex.RLock()
+	matchmakingRoom.mutex.Lock()
 	for client := range matchmakingRoom.clients {
 		// Only send to participants of the room
 		for _, userID := range participantUserIDs {
@@ -307,7 +307,7 @@ func BroadcastRoomCreated(roomID string, participantUserIDs []string) {
 			}
 		}
 	}
-	matchmakingRoom.mutex.RUnlock()
+	matchmakingRoom.mutex.Unlock()
 }
 
 // WatchForNewRooms monitors the rooms collection for new rooms and notifies clients
@@ -351,22 +351,30 @@ func WatchForNewRooms() {
 			continue
 		}
 
-		roomID, ok := fullDocument["_id"].(string)
-		if !ok {
+		var roomID string
+		switch v := fullDocument["_id"].(type) {
+		case primitive.ObjectID:
+			roomID = v.Hex()
+		case string:
+			roomID = v
+		default:
 			continue
 		}
-
 		// Extract participant user IDs
 		participants, ok := fullDocument["participants"].(bson.A)
 		if !ok {
 			continue
 		}
-
 		var participantUserIDs []string
 		for _, p := range participants {
 			if participant, ok := p.(bson.M); ok {
-				if userID, ok := participant["id"].(string); ok {
-					participantUserIDs = append(participantUserIDs, userID)
+				if idVal, ok := participant["id"]; ok {
+					switch id := idVal.(type) {
+					case primitive.ObjectID:
+						participantUserIDs = append(participantUserIDs, id.Hex())
+					case string:
+						participantUserIDs = append(participantUserIDs, id)
+					}
 				}
 			}
 		}

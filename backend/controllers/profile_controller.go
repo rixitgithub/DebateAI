@@ -88,7 +88,7 @@ func GetProfile(c *gin.Context) {
 	cursor, err := db.MongoDatabase.Collection("users").Find(
 		dbCtx,
 		bson.M{},
-		options.Find().SetSort(bson.D{{"eloRating", -1}}).SetLimit(5),
+		options.Find().SetSort(bson.D{{"rating", -1}}).SetLimit(5),
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "message": "Failed to fetch leaderboard"})
@@ -193,7 +193,7 @@ func GetProfile(c *gin.Context) {
 			"displayName": displayName,
 			"email":       user.Email,
 			"bio":         user.Bio,
-			"eloRating":   int(user.Rating),
+			"rating":   int(user.Rating),
 			"twitter":     user.Twitter,
 			"instagram":   user.Instagram,
 			"linkedin":    user.LinkedIn,
@@ -281,8 +281,8 @@ func UpdateEloAfterDebate(ctx *gin.Context) {
 	loserChange := newLoserElo - loser.Rating
 
 	// Update users
-	db.MongoDatabase.Collection("users").UpdateOne(dbCtx, bson.M{"_id": winnerID}, bson.M{"$set": bson.M{"eloRating": newWinnerElo}})
-	db.MongoDatabase.Collection("users").UpdateOne(dbCtx, bson.M{"_id": loserID}, bson.M{"$set": bson.M{"eloRating": newLoserElo}})
+	db.MongoDatabase.Collection("users").UpdateOne(dbCtx, bson.M{"_id": winnerID}, bson.M{"$set": bson.M{"rating": newWinnerElo}})
+	db.MongoDatabase.Collection("users").UpdateOne(dbCtx, bson.M{"_id": loserID}, bson.M{"$set": bson.M{"rating": newLoserElo}})
 
 	// Log debates
 	now := time.Now()
@@ -291,7 +291,7 @@ func UpdateEloAfterDebate(ctx *gin.Context) {
 		"topic":     req.Topic,
 		"result":    "win",
 		"eloChange": winnerChange,
-		"eloRating": newWinnerElo,
+		"rating": newWinnerElo,
 		"date":      now,
 	})
 	db.MongoDatabase.Collection("debates").InsertOne(dbCtx, bson.M{
@@ -299,7 +299,7 @@ func UpdateEloAfterDebate(ctx *gin.Context) {
 		"topic":     req.Topic,
 		"result":    "loss",
 		"eloChange": loserChange,
-		"eloRating": newLoserElo,
+		"rating": newLoserElo,
 		"date":      now,
 	})
 

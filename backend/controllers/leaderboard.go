@@ -48,7 +48,7 @@ func GetLeaderboard(c *gin.Context) {
 
 	// Query users sorted by Rating (descending)
 	collection := db.MongoDatabase.Collection("users")
-	findOptions := options.Find().SetSort(bson.D{{"eloRating", -1}})
+	findOptions := options.Find().SetSort(bson.D{{"rating", -1}})
 	cursor, err := collection.Find(c, bson.M{}, findOptions)
 	if err != nil {
 		log.Printf("Failed to fetch users: %v", err)

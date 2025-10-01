@@ -35,5 +35,9 @@ func VerifyTokenRouteHandler(c *gin.Context) {
 }
 
 func GetMatchmakingPoolStatusHandler(c *gin.Context) {
-	controllers.GetMatchmakingPoolStatus(c)
+	if c.GetBool("isAdmin") || c.GetBool("debugMode") {
+		controllers.GetMatchmakingPoolStatus(c)
+		return
+	}
+	c.JSON(403, gin.H{"error": "forbidden"})
 }

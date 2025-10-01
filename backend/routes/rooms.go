@@ -66,7 +66,7 @@ func CreateRoomHandler(c *gin.Context) {
 		ID          primitive.ObjectID `bson:"_id"`
 		Email       string `bson:"email"`
 		DisplayName string `bson:"displayName"`
-		Rating   int    `bson:"eloRating"`
+		Rating   int    `bson:"rating"`
 	}
 
 	err := userCollection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
@@ -109,19 +109,16 @@ func GetRoomsHandler(c *gin.Context) {
 
 	cursor, err := collection.Find(ctx, bson.D{})
 	if err != nil {
-		log.Printf("❌ Error fetching rooms from DB: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching rooms"})
 		return
 	}
 
 	var rooms []Room
 	if err = cursor.All(ctx, &rooms); err != nil {
-		log.Printf("❌ Error decoding rooms cursor: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding rooms"})
 		return
 	}
 
-	log.Printf("✅ Successfully fetched %d rooms", len(rooms))
 	c.JSON(http.StatusOK, rooms)
 }
 
@@ -145,7 +142,7 @@ func JoinRoomHandler(c *gin.Context) {
 		ID          primitive.ObjectID `bson:"_id"`
 		Email       string `bson:"email"`
 		DisplayName string `bson:"displayName"`
-		Rating      int    `bson:"eloRating"`
+		Rating      int    `bson:"rating"`
 	}
 
 	err := userCollection.FindOne(ctx, bson.M{"email": email.(string)}).Decode(&user)
@@ -238,27 +235,24 @@ func GetRoomParticipantsHandler(c *gin.Context) {
 			ID          primitive.ObjectID `bson:"_id"`
 			Email       string `bson:"email"`
 			DisplayName string `bson:"displayName"`
-			Rating      int    `bson:"eloRating"`
+			Rating      int    `bson:"rating"`
 			AvatarURL   string `bson:"avatarUrl"`
 		}
 
 		// Try to find user by ID first
 		objectID, err := primitive.ObjectIDFromHex(participant.ID)
 		if err != nil {
-			log.Printf("Invalid ObjectID format for participant %s, trying by email", participant.ID)
 			// If not a valid ObjectID, try to find by email (fallback)
 			err = userCollection.FindOne(ctx, bson.M{"email": participant.ID}).Decode(&user)
 		} else {
 			err = userCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
 			if err != nil {
-				log.Printf("User not found by ID %s, trying by email", participant.ID)
 				// If not found by ID, try to find by email (fallback)
 				err = userCollection.FindOne(ctx, bson.M{"email": participant.ID}).Decode(&user)
 			}
 		}
 		
 		if err != nil {
-			log.Printf("User not found for participant %s, using basic info", participant.ID)
 			// If user not found, use basic participant info with default avatar
 			participantsWithDetails = append(participantsWithDetails, gin.H{
 				"id":          participant.ID,
@@ -268,7 +262,6 @@ func GetRoomParticipantsHandler(c *gin.Context) {
 				"avatarUrl":   "https://api.dicebear.com/9.x/adventurer/svg?seed=" + participant.Username,
 			})
 		} else {
-			log.Printf("Found user details for %s: %s (%s)", participant.ID, user.DisplayName, user.Email)
 			// Ensure we have a default avatar if none is set
 			avatarUrl := user.AvatarURL
 			if avatarUrl == "" {
@@ -285,6 +278,5 @@ func GetRoomParticipantsHandler(c *gin.Context) {
 		}
 	}
 
-	log.Printf("Returning participants for room %s: %+v", roomId, participantsWithDetails)
 	c.JSON(http.StatusOK, participantsWithDetails)
 }

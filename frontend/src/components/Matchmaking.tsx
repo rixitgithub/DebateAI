@@ -20,7 +20,7 @@ interface MatchmakingMessage {
   username?: string;
   elo?: number;
   roomId?: string;
-  pool?: string;
+  pool?: MatchmakingPool[] | string;
   error?: string;
 }
 
@@ -77,7 +77,9 @@ const Matchmaking: React.FC = () => {
       switch (message.type) {
         case 'pool_update':
           if (message.pool) {
-            const poolData: MatchmakingPool[] = JSON.parse(message.pool);
+            const poolData: MatchmakingPool[] = Array.isArray(message.pool)
+              ? message.pool
+              : JSON.parse(message.pool as string);
             setPool(poolData);
 
             // Check if current user is in pool

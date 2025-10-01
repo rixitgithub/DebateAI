@@ -1,6 +1,6 @@
 import { getAuthToken } from '@/utils/auth';
 
-const API_BASE_URL = 'http://localhost:1313';
+const API_BASE_URL = import.meta.env.VITE_BASE_URL || 'http://localhost:1313';
 
 export interface SavedDebateTranscript {
   id: string;
@@ -51,7 +51,9 @@ export interface DebateStats {
 
 export const transcriptService = {
   // Save a debate transcript
-  async saveTranscript(data: SaveTranscriptRequest): Promise<{ message: string }> {
+  async saveTranscript(
+    data: SaveTranscriptRequest
+  ): Promise<{ message: string }> {
     const token = getAuthToken();
     if (!token) {
       throw new Error('Authentication token not found');
@@ -61,14 +63,21 @@ export const transcriptService = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(data),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to save transcript');
+      let msg = 'Request failed';
+      try {
+        const errorData = await response.json();
+        msg =
+          errorData.error || errorData.message || response.statusText || msg;
+      } catch {
+        msg = response.statusText || msg;
+      }
+      throw new Error(msg);
     }
 
     return response.json();
@@ -84,7 +93,7 @@ export const transcriptService = {
     const response = await fetch(`${API_BASE_URL}/transcripts`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -108,7 +117,7 @@ export const transcriptService = {
     const response = await fetch(`${API_BASE_URL}/transcript/${id}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -131,7 +140,7 @@ export const transcriptService = {
     const response = await fetch(`${API_BASE_URL}/transcript/${id}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -153,7 +162,7 @@ export const transcriptService = {
     const response = await fetch(`${API_BASE_URL}/create-test-transcript`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -175,7 +184,7 @@ export const transcriptService = {
     const response = await fetch(`${API_BASE_URL}/create-test-bot-debate`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -197,7 +206,7 @@ export const transcriptService = {
     const response = await fetch(`${API_BASE_URL}/debate-stats`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 

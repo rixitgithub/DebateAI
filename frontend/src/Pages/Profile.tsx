@@ -83,7 +83,7 @@ interface ProfileData {
   displayName: string;
   email: string;
   bio: string;
-  eloRating: number;
+  rating: number;
   twitter?: string;
   instagram?: string;
   linkedin?: string;
@@ -209,6 +209,10 @@ const Profile: React.FC = () => {
     date: string;
     eloChange?: number;
   }) => {
+    if (!debate.id) {
+      setErrorMessage("Transcript not available for this debate.");
+      return;
+    }
     setSelectedDebate(debate);
     setIsDebateDialogOpen(true);
     setTranscriptLoading(true);
@@ -542,7 +546,7 @@ const Profile: React.FC = () => {
 
     if (filteredHistory.length === 0 && eloFilter !== "custom") {
       filteredHistory = [
-        { elo: profile.eloRating, date: new Date().toISOString() },
+        { elo: profile.rating, date: new Date().toISOString() },
       ];
     }
 
@@ -559,12 +563,12 @@ const Profile: React.FC = () => {
   const eloValues = filteredEloHistory.map((entry) => entry.elo);
   const minElo =
     eloValues.length > 0
-      ? Math.min(...eloValues, profile.eloRating)
-      : profile.eloRating;
+      ? Math.min(...eloValues, profile.rating)
+      : profile.rating;
   const maxElo =
     eloValues.length > 0
-      ? Math.max(...eloValues, profile.eloRating)
-      : profile.eloRating;
+      ? Math.max(...eloValues, profile.rating)
+      : profile.rating;
   const padding = Math.round((maxElo - minElo) * 0.1) || 50;
   const yDomain = [minElo - padding, maxElo + padding];
 
@@ -705,7 +709,7 @@ const Profile: React.FC = () => {
             </div>
           )}
           <p className="text-sm bg-primary text-primary-foreground px-2 py-1 rounded mt-2">
-            Elo: {profile.eloRating}
+            Elo: {profile.rating}
           </p>
         </div>
         <Separator className="my-2" />
@@ -899,7 +903,7 @@ const Profile: React.FC = () => {
               !(
                 eloFilter === "custom" &&
                 filteredEloHistory.length === 1 &&
-                filteredEloHistory[0].elo === profile.eloRating
+                filteredEloHistory[0].elo === profile.rating
               ) ? (
                 <ChartContainer
                   config={eloChartConfig}

@@ -36,16 +36,18 @@ type SavedDebateTranscript struct {
 	UpdatedAt   time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
-// MarshalJSON customizes JSON marshaling for SavedDebateTranscript
 func (s SavedDebateTranscript) MarshalJSON() ([]byte, error) {
 	type Alias SavedDebateTranscript
+	a := Alias(s)
+	a.ID = primitive.NilObjectID
+	a.UserID = primitive.NilObjectID
 	return json.Marshal(&struct {
 		ID     string `json:"id"`
 		UserID string `json:"userId"`
-		*Alias
+		Alias
 	}{
 		ID:     s.ID.Hex(),
 		UserID: s.UserID.Hex(),
-		Alias:  (*Alias)(&s),
+		Alias:  a,
 	})
 }

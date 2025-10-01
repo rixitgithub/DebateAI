@@ -40,13 +40,14 @@ const Chatbox: React.FC<{
   const [inputText, setInputText] = useState('');
   const [inputMode, setInputMode] = useState<'type' | 'speak'>('type');
   const [isRecognizing, setIsRecognizing] = useState(false);
-  const [interimText, setInterimText] = useState('');
-  const [finalText, setFinalText] = useState('');
+  const [, setInterimText] = useState('');
+  const [, setFinalText] = useState('');
 
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Initialize speech recognition
+  const finalTextRef = useRef('');
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition =
@@ -63,7 +64,7 @@ const Chatbox: React.FC<{
 
       recognitionRef.current.onresult = (event: any) => {
         let interimTranscript = '';
-        let finalTranscript = finalText;
+        let finalTranscript = finalTextRef.current;
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
@@ -74,6 +75,7 @@ const Chatbox: React.FC<{
           }
         }
 
+        finalTextRef.current = finalTranscript;
         setFinalText(finalTranscript);
         setInterimText(interimTranscript);
         setInputText(finalTranscript + interimTranscript);
@@ -90,7 +92,7 @@ const Chatbox: React.FC<{
         onSpeakingChange(false);
       };
     }
-  }, [finalText, onSpeakingChange]);
+  }, [onSpeakingChange]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
