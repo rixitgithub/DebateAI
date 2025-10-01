@@ -194,7 +194,6 @@ func (ms *MatchmakingService) createRoomForMatch(user1, user2 *MatchmakingPool) 
 		log.Printf("Room %s created (in-memory only) for users %s and %s", roomID, user1.UserID, user2.UserID)
 		return
 	}
-	roomCollection := db.MongoDatabase.Collection("rooms")
 	
 	// Create room with both participants
 	room := bson.M{

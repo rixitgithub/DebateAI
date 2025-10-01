@@ -1,20 +1,20 @@
 package websocket
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
-	"sync"
-	"time"
+    "context"
+    "encoding/json"
+    "log"
+    "net/http"
+    "sync"
+    "time"
 
-	"arguehub/db"
-	"arguehub/utils"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+    "arguehub/db"
+    "arguehub/utils"
+    "github.com/gin-gonic/gin"
+    "github.com/gorilla/websocket"
+    "go.mongodb.org/mongo-driver/bson"
+    "go.mongodb.org/mongo-driver/bson/primitive"
+    "strings" 
 )
 
 var upgrader = websocket.Upgrader{
