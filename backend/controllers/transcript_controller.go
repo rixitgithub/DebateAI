@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"os"
 )
 
 // SubmitTranscriptsRequest represents the request to submit debate transcripts
@@ -257,6 +258,10 @@ func DeleteTranscriptHandler(c *gin.Context) {
 
 // CreateTestTranscriptHandler creates a test transcript for debugging
 func CreateTestTranscriptHandler(c *gin.Context) {
+	if env := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))); env == "prod" || env == "production" {
+       c.JSON(403, gin.H{"error": "Not available"})
+       return
+   }
 	token := c.GetHeader("Authorization")
 	if token == "" {
 		c.JSON(401, gin.H{"error": "Authorization token required"})
@@ -308,6 +313,10 @@ func CreateTestTranscriptHandler(c *gin.Context) {
 
 // CreateTestBotDebateHandler creates a test bot debate transcript for debugging
 func CreateTestBotDebateHandler(c *gin.Context) {
+	if env := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV"))); env == "prod" || env == "production" {
+       c.JSON(403, gin.H{"error": "Not available"})
+       return
+   }
 	token := c.GetHeader("Authorization")
 	if token == "" {
 		c.JSON(401, gin.H{"error": "Authorization token required"})
@@ -471,10 +480,14 @@ func UpdateTranscriptResultHandler(c *gin.Context) {
 	defer cancel()
 
 	collection := db.MongoDatabase.Collection("saved_debate_transcripts")
+	now := time.Now()
 	update := bson.M{
 		"$set": bson.M{
-			"result":    req.Result,
-			"updatedAt": time.Now(),
+			"result":        req.Result,
+			"updatedAt":     now,
+			"manualOverride": true,
+			"overriddenBy":  userID,
+			"overriddenAt":  now,
 		},
 	}
 
@@ -494,6 +507,5 @@ func UpdateTranscriptResultHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Successfully updated transcript %s result to %s for user %s", transcriptID, req.Result, email)
 	c.JSON(200, gin.H{"message": "Transcript result updated successfully"})
 }

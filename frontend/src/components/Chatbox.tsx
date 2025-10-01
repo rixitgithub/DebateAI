@@ -18,6 +18,31 @@ export interface TypingIndicator {
   partialText?: string;
 }
 
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognition;
+}
+
 const Chatbox: React.FC<{
   messages: ChatMessage[];
   transcriptStatus: { loading: boolean; isUser: boolean };
@@ -43,26 +68,37 @@ const Chatbox: React.FC<{
   const [, setInterimText] = useState('');
   const [, setFinalText] = useState('');
 
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const onSpeakingChangeRef = useRef(onSpeakingChange);
+
+  // Update onSpeakingChangeRef when onSpeakingChange changes
+  useEffect(() => {
+    onSpeakingChangeRef.current = onSpeakingChange;
+  }, [onSpeakingChange]);
 
   // Initialize speech recognition
   const finalTextRef = useRef('');
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
+    const SpeechRecognitionConstructor:
+      | SpeechRecognitionConstructor
+      | undefined = (window.SpeechRecognition ||
+      window.webkitSpeechRecognition) as
+      | SpeechRecognitionConstructor
+      | undefined;
+    if (SpeechRecognitionConstructor) {
+      recognitionRef.current = new SpeechRecognitionConstructor();
+      const recognition = recognitionRef.current;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-      recognitionRef.current.onstart = () => {
+      recognition.onstart = () => {
         setIsRecognizing(true);
-        onSpeakingChange(true);
+        onSpeakingChangeRef.current(true);
       };
 
-      recognitionRef.current.onresult = (event: any) => {
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
         let interimTranscript = '';
         let finalTranscript = finalTextRef.current;
 
@@ -81,18 +117,18 @@ const Chatbox: React.FC<{
         setInputText(finalTranscript + interimTranscript);
       };
 
-      recognitionRef.current.onerror = (event: any) => {
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error:', event.error);
         setIsRecognizing(false);
-        onSpeakingChange(false);
+        onSpeakingChangeRef.current(false);
       };
 
-      recognitionRef.current.onend = () => {
+      recognition.onend = () => {
         setIsRecognizing(false);
-        onSpeakingChange(false);
+        onSpeakingChangeRef.current(false);
       };
     }
-  }, [onSpeakingChange]);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
@@ -271,7 +307,7 @@ const Chatbox: React.FC<{
 
           {transcriptStatus.loading && (
             <div
-              className={`flex w-max max-w-[75%] flex-col gap-2 rounded-lg px-3 py-2 text-sm bg-muted animate-pulse ${
+              className={`flex w-max max-w-[75%] flex-col gap-2 rounded-lg px-3 py-2 text-sm animate-pulse ${
                 transcriptStatus.isUser
                   ? 'ml-auto bg-primary text-primary-foreground'
                   : 'bg-muted'

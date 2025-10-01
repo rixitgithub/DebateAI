@@ -176,63 +176,59 @@ func (ms *MatchmakingService) findMatch(userID string) {
 
 // createRoomForMatch creates a room for two matched users
 func (ms *MatchmakingService) createRoomForMatch(user1, user2 *MatchmakingPool) {
-	// Use atomic operation to create room and remove users from pool
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	roomCollection := db.MongoDatabase.Collection("rooms")
-	
-	roomID := generateRoomID() // Generate room ID (see ID strategy comment below)
-	// If DB is not initialized, skip persistence but still complete the match.
-	if db.MongoDatabase == nil {
-		log.Printf("MongoDatabase is nil; skipping room persistence for %s vs %s", user1.UserID, user2.UserID)
-		ms.RemoveFromPool(user1.UserID)
-		ms.RemoveFromPool(user2.UserID)
-		if roomCreatedCallback != nil {
-			roomCreatedCallback(roomID, []string{user1.UserID, user2.UserID})
-		}
-		log.Printf("Room %s created (in-memory only) for users %s and %s", roomID, user1.UserID, user2.UserID)
-		return
-	}
-	
-	// Create room with both participants
-	room := bson.M{
-		"_id": roomID,
-		"type": "public",
-		"participants": []bson.M{
-			{
-				"id":       user1.UserID,
-				"username": user1.Username,
-				"elo":      user1.Elo,
-			},
-			{
-				"id":       user2.UserID,
-				"username": user2.Username,
-				"elo":      user2.Elo,
-			},
-		},
-		"createdAt": time.Now(),
-		"status":    "waiting", // waiting, active, completed
-	}
-	// Insert the room directly
-	_, err := roomCollection.InsertOne(ctx, room)
-	if err != nil {
-		log.Printf("Failed to persist room %s: %v (continuing with match)", roomID, err)
-	}
-
-	// Remove both users from the pool
-	ms.RemoveFromPool(user1.UserID)
-	ms.RemoveFromPool(user2.UserID)
-
-	log.Printf("Created room %s for users %s (Elo: %d) and %s (Elo: %d)", 
-		roomID, user1.Username, user1.Elo, user2.Username, user2.Elo)
-
-	// Broadcast room creation to WebSocket clients
-	participantUserIDs := []string{user1.UserID, user2.UserID}
-	if roomCreatedCallback != nil {
-		roomCreatedCallback(roomID, participantUserIDs)
-	}
-	log.Printf("Room %s created successfully for users %s and %s", roomID, user1.UserID, user2.UserID)
+    // Use atomic operation to create room and remove users from pool
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+    roomID := generateRoomID() // Generate room ID (see ID strategy comment below)
+    
+    // If DB is not initialized, skip persistence but still complete the match.
+    if db.MongoDatabase == nil {
+        log.Printf("MongoDatabase is nil; skipping room persistence for %s vs %s", user1.UserID, user2.UserID)
+        ms.RemoveFromPool(user1.UserID)
+        ms.RemoveFromPool(user2.UserID)
+        if roomCreatedCallback != nil {
+            roomCreatedCallback(roomID, []string{user1.UserID, user2.UserID})
+        }
+        log.Printf("Room %s created (in-memory only) for users %s and %s", roomID, user1.UserID, user2.UserID)
+        return
+    }
+    roomCollection := db.MongoDatabase.Collection("rooms")
+    
+    // Create room with both participants
+    room := bson.M{
+        "_id":       roomID,
+        "type":      "public",
+        "participants": []bson.M{
+            {
+                "id":       user1.UserID,
+                "username": user1.Username,
+                "elo":      user1.Elo,
+            },
+            {
+                "id":       user2.UserID,
+                "username": user2.Username,
+                "elo":      user2.Elo,
+            },
+        },
+        "createdAt": time.Now(),
+        "status":    "waiting", // waiting, active, completed
+    }
+    // Insert the room directly
+    _, err := roomCollection.InsertOne(ctx, room)
+    if err != nil {
+        log.Printf("Failed to persist room %s: %v (continuing with match)", roomID, err)
+    }
+    // Remove both users from the pool
+    ms.RemoveFromPool(user1.UserID)
+    ms.RemoveFromPool(user2.UserID)
+    log.Printf("Created room %s for users %s (Elo: %d) and %s (Elo: %d)", 
+        roomID, user1.Username, user1.Elo, user2.Username, user2.Elo)
+    // Broadcast room creation to WebSocket clients
+    participantUserIDs := []string{user1.UserID, user2.UserID}
+    if roomCreatedCallback != nil {
+        roomCreatedCallback(roomID, participantUserIDs)
+    }
+    log.Printf("Room %s created successfully for users %s and %s", roomID, user1.UserID, user2.UserID)
 }
 
 // cleanupInactiveUsers removes users who have been inactive for too long

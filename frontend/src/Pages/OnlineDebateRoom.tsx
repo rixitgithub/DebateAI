@@ -222,7 +222,9 @@ const OnlineDebateRoom: React.FC = () => {
     transcripts: { [key in DebatePhase]?: string }
   ) => {
     const token = getAuthToken();
-
+    if (!token) {
+      throw new Error("No auth token found. Please sign in again.");
+    }
     try {
       const response = await fetch(`http://localhost:1313/submit-transcripts`, {
         method: "POST",

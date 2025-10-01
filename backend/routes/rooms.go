@@ -259,13 +259,13 @@ func GetRoomParticipantsHandler(c *gin.Context) {
 				"username":    participant.Username,
 				"displayName": participant.Username,
 				"elo":         participant.Elo,
-				"avatarUrl":   "https://api.dicebear.com/9.x/adventurer/svg?seed=" + participant.Username,
+				"avatarUrl":   "https://api.dicebear.com/9.x/adventurer/svg?seed=" + participant.ID,
 			})
 		} else {
 			// Ensure we have a default avatar if none is set
 			avatarUrl := user.AvatarURL
 			if avatarUrl == "" {
-				avatarUrl = "https://api.dicebear.com/9.x/adventurer/svg?seed=" + user.DisplayName
+				avatarUrl = "https://api.dicebear.com/9.x/adventurer/svg?seed=" + user.ID.Hex()
 			}
 			
 			participantsWithDetails = append(participantsWithDetails, gin.H{

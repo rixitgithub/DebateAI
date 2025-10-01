@@ -187,8 +187,8 @@ const Profile: React.FC = () => {
         // Extract recent debates from profile data
         if (data.stats && data.stats.recentDebates) {
           setRecentDebates(data.stats.recentDebates);
-          setDebateStatsLoading(false);
         }
+        setDebateStatsLoading(false);
       } catch (err) {
         setErrorMessage("Failed to load dashboard data.");
         console.error(err);
