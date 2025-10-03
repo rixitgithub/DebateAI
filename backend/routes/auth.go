@@ -33,3 +33,11 @@ func VerifyForgotPasswordRouteHandler(c *gin.Context) {
 func VerifyTokenRouteHandler(c *gin.Context) {
 	controllers.VerifyToken(c)
 }
+
+func GetMatchmakingPoolStatusHandler(c *gin.Context) {
+	if c.GetBool("isAdmin") || c.GetBool("debugMode") {
+		controllers.GetMatchmakingPoolStatus(c)
+		return
+	}
+	c.JSON(403, gin.H{"error": "forbidden"})
+}

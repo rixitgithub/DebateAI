@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"arguehub/db"
+	"arguehub/services"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -61,10 +63,10 @@ func CreateRoomHandler(c *gin.Context) {
 	defer cancel()
 
 	var user struct {
-		ID          string `bson:"_id"`
+		ID          primitive.ObjectID `bson:"_id"`
 		Email       string `bson:"email"`
 		DisplayName string `bson:"displayName"`
-		Rating   int    `bson:"eloRating"`
+		Rating   int    `bson:"rating"`
 	}
 
 	err := userCollection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
@@ -75,7 +77,7 @@ func CreateRoomHandler(c *gin.Context) {
 
 	// Add the room creator as the first participant
 	creatorParticipant := Participant{
-		ID:       user.ID,
+		ID:       user.ID.Hex(),
 		Username: user.DisplayName,
 		Elo:      user.Rating,
 	}
@@ -107,46 +109,174 @@ func GetRoomsHandler(c *gin.Context) {
 
 	cursor, err := collection.Find(ctx, bson.D{})
 	if err != nil {
-		log.Printf("❌ Error fetching rooms from DB: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching rooms"})
 		return
 	}
 
 	var rooms []Room
 	if err = cursor.All(ctx, &rooms); err != nil {
-		log.Printf("❌ Error decoding rooms cursor: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decoding rooms"})
 		return
 	}
 
-	log.Printf("✅ Successfully fetched %d rooms", len(rooms))
 	c.JSON(http.StatusOK, rooms)
 }
 
 // JoinRoomHandler handles POST /rooms/:id/join where a user joins a room.
 func JoinRoomHandler(c *gin.Context) {
 	roomId := c.Param("id")
-	collection := db.MongoClient.Database("DebateAI").Collection("rooms")
+	
+	// Get user email from middleware-set context
+	email, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user email not found"})
+		return
+	}
+
+	// Query user document using email
+	userCollection := db.MongoClient.Database("DebateAI").Collection("users")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Dummy participant (replace this with actual user in production)
-	dummyUser := Participant{
-		ID:       "dummyUserID",
-		Username: "JohnDoe",
-		Elo:      1200,
+	var user struct {
+		ID          primitive.ObjectID `bson:"_id"`
+		Email       string `bson:"email"`
+		DisplayName string `bson:"displayName"`
+		Rating      int    `bson:"rating"`
 	}
 
+	err := userCollection.FindOne(ctx, bson.M{"email": email.(string)}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Create participant
+	participant := Participant{
+		ID:       user.ID.Hex(),
+		Username: user.DisplayName,
+		Elo:      user.Rating,
+	}
+
+	// Use atomic operation to join room
+	roomCollection := db.MongoClient.Database("DebateAI").Collection("rooms")
 	filter := bson.M{"_id": roomId}
 	update := bson.M{
-		"$addToSet": bson.M{"participants": dummyUser},
+		"$addToSet": bson.M{"participants": participant},
 	}
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 
 	var updatedRoom Room
-	if err := collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedRoom); err != nil {
+	if err := roomCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedRoom); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not join room"})
 		return
 	}
+
+	// Remove user from matchmaking pool if they were in it
+	matchmakingService := services.GetMatchmakingService()
+	matchmakingService.RemoveFromPool(user.ID.Hex())
+
 	c.JSON(http.StatusOK, updatedRoom)
+}
+
+// GetRoomParticipantsHandler handles GET /rooms/:id/participants and returns the participants of a room.
+func GetRoomParticipantsHandler(c *gin.Context) {
+	roomId := c.Param("id")
+	
+	// Get user email from middleware-set context
+	email, exists := c.Get("email")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: user email not found"})
+		return
+	}
+
+	// Query room document
+	roomCollection := db.MongoClient.Database("DebateAI").Collection("rooms")
+	userCollection := db.MongoClient.Database("DebateAI").Collection("users")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var room Room
+	err := roomCollection.FindOne(ctx, bson.M{"_id": roomId}).Decode(&room)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Room not found"})
+		return
+	}
+
+	// Get user ID from email
+	var user struct {
+		ID primitive.ObjectID `bson:"_id"`
+	}
+	err = userCollection.FindOne(ctx, bson.M{"email": email.(string)}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Check if user is a participant in this room
+	isParticipant := false
+	for _, participant := range room.Participants {
+		if participant.ID == user.ID.Hex() {
+			isParticipant = true
+			break
+		}
+	}
+
+	if !isParticipant {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not a participant in this room"})
+		return
+	}
+
+	// Get full user details for each participant
+	var participantsWithDetails []gin.H
+
+	for _, participant := range room.Participants {
+		var user struct {
+			ID          primitive.ObjectID `bson:"_id"`
+			Email       string `bson:"email"`
+			DisplayName string `bson:"displayName"`
+			Rating      int    `bson:"rating"`
+			AvatarURL   string `bson:"avatarUrl"`
+		}
+
+		// Try to find user by ID first
+		objectID, err := primitive.ObjectIDFromHex(participant.ID)
+		if err != nil {
+			// If not a valid ObjectID, try to find by email (fallback)
+			err = userCollection.FindOne(ctx, bson.M{"email": participant.ID}).Decode(&user)
+		} else {
+			err = userCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
+			if err != nil {
+				// If not found by ID, try to find by email (fallback)
+				err = userCollection.FindOne(ctx, bson.M{"email": participant.ID}).Decode(&user)
+			}
+		}
+		
+		if err != nil {
+			// If user not found, use basic participant info with default avatar
+			participantsWithDetails = append(participantsWithDetails, gin.H{
+				"id":          participant.ID,
+				"username":    participant.Username,
+				"displayName": participant.Username,
+				"elo":         participant.Elo,
+				"avatarUrl":   "https://api.dicebear.com/9.x/adventurer/svg?seed=" + participant.ID,
+			})
+		} else {
+			// Ensure we have a default avatar if none is set
+			avatarUrl := user.AvatarURL
+			if avatarUrl == "" {
+				avatarUrl = "https://api.dicebear.com/9.x/adventurer/svg?seed=" + user.ID.Hex()
+			}
+			
+			participantsWithDetails = append(participantsWithDetails, gin.H{
+				"id":          user.ID.Hex(),
+				"username":    user.DisplayName,
+				"displayName": user.DisplayName,
+				"elo":         user.Rating,
+				"avatarUrl":   avatarUrl,
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, participantsWithDetails)
 }

@@ -64,6 +64,7 @@ func CheckPasswordHash(password, hash string) bool {
 type Claims struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
+	Sub    string `json:"sub"`
 	jwt.RegisteredClaims
 }
 
@@ -132,7 +133,23 @@ func ValidateTokenAndFetchEmail(configPath, token string, c *gin.Context) (bool,
 	if err != nil {
 		return false, "", err
 	}
-	return true, claims.Email, nil
+	
+	// Try to get email from different possible fields
+	email := claims.Email
+	if email == "" {
+		email = claims.Sub
+	}
+	
+	return true, email, nil
+}
+
+func GetUserIDFromToken(token string) (string, error) {
+	claims, err := ParseJWTToken(token)
+	if err != nil {
+		return "", err
+	}
+	
+	return claims.UserID, nil
 }
 
 func GenerateSecretHash(username, clientID, clientSecret string) string {

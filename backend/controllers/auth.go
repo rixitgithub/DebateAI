@@ -12,12 +12,14 @@ import (
 	"arguehub/config"
 	"arguehub/db"
 	"arguehub/models"
+	"arguehub/services"
 	"arguehub/structs"
 	"arguehub/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/api/idtoken"
@@ -57,6 +59,7 @@ func GoogleLogin(ctx *gin.Context) {
 	if nickname == "" {
 		nickname = utils.ExtractNameFromEmail(email)
 	}
+	avatarURL, _ := payload.Claims["picture"].(string)
 
 	// Check if user exists in MongoDB
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -69,36 +72,63 @@ func GoogleLogin(ctx *gin.Context) {
 		return
 	}
 
+	now := time.Now()
 	if err == mongo.ErrNoDocuments {
 		// Create new user
 		newUser := models.User{
-			Email:      email,
-			Password:   "", // No password for Google users
-			Nickname:   nickname,
-			Rating:  1200,
-			IsVerified: true, // Google-verified emails are trusted
-			CreatedAt:  time.Now(),
-			UpdatedAt:  time.Now(),
+			Email:            email,
+			DisplayName:      nickname,
+			Nickname:         nickname,
+			Bio:              "",
+			Rating:           1200.0,
+			RD:               350.0,
+			Volatility:       0.06,
+			LastRatingUpdate: now,
+			AvatarURL:        avatarURL,
+			IsVerified:       true,
+			CreatedAt:        now,
+			UpdatedAt:        now,
 		}
-		_, err = db.MongoDatabase.Collection("users").InsertOne(dbCtx, newUser)
+		result, err := db.MongoDatabase.Collection("users").InsertOne(dbCtx, newUser)
 		if err != nil {
 			log.Printf("User insertion error: %v", err)
 			ctx.JSON(500, gin.H{"error": "Failed to create user", "message": err.Error()})
 			return
 		}
+		newUser.ID = result.InsertedID.(primitive.ObjectID)
+		existingUser = newUser
 	}
 
 	// Generate JWT
-	token, err := generateJWT(email, cfg.JWT.Secret, cfg.JWT.Expiry)
+	token, err := generateJWT(existingUser.Email, cfg.JWT.Secret, cfg.JWT.Expiry)
 	if err != nil {
 		log.Printf("Token generation error: %v", err)
 		ctx.JSON(500, gin.H{"error": "Failed to generate token", "message": err.Error()})
 		return
 	}
 
+	// Return user details (excluding sensitive fields)
 	ctx.JSON(http.StatusOK, gin.H{
 		"message":     "Google login successful",
 		"accessToken": token,
+		"user": gin.H{
+			"id":              existingUser.ID.Hex(),
+			"email":           existingUser.Email,
+			"displayName":     existingUser.DisplayName,
+			"nickname":        existingUser.Nickname,
+			"bio":             existingUser.Bio,
+			"rating":          existingUser.Rating,
+			"rd":              existingUser.RD,
+			"volatility":      existingUser.Volatility,
+			"lastRatingUpdate": existingUser.LastRatingUpdate.Format(time.RFC3339),
+			"avatarUrl":       existingUser.AvatarURL,
+			"twitter":         existingUser.Twitter,
+			"instagram":       existingUser.Instagram,
+			"linkedin":        existingUser.LinkedIn,
+			"isVerified":      existingUser.IsVerified,
+			"createdAt":       existingUser.CreatedAt.Format(time.RFC3339),
+			"updatedAt":       existingUser.UpdatedAt.Format(time.RFC3339),
+		},
 	})
 }
 
@@ -140,32 +170,61 @@ func SignUp(ctx *gin.Context) {
 	verificationCode := utils.GenerateRandomCode(6)
 
 	// Create new user
+	now := time.Now()
 	newUser := models.User{
 		Email:            request.Email,
-		Password:         string(hashedPassword),
+		DisplayName:      utils.ExtractNameFromEmail(request.Email),
 		Nickname:         utils.ExtractNameFromEmail(request.Email),
-		Rating:        1200,
+		Bio:              "",
+		Rating:           1200.0,
+		RD:               350.0,
+		Volatility:       0.06,
+		LastRatingUpdate: now,
+		AvatarURL:        "https://avatar.iran.liara.run/public/10",
+		Password:         string(hashedPassword),
 		IsVerified:       false,
 		VerificationCode: verificationCode,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	// Insert user into MongoDB
-	_, err = db.MongoDatabase.Collection("users").InsertOne(dbCtx, newUser)
+	result, err := db.MongoDatabase.Collection("users").InsertOne(dbCtx, newUser)
 	if err != nil {
 		ctx.JSON(500, gin.H{"error": "Failed to create user", "message": err.Error()})
 		return
 	}
+	newUser.ID = result.InsertedID.(primitive.ObjectID)
 
-	// Send verification email (implement email sending logic)
+	// Send verification email
 	err = utils.SendVerificationEmail(request.Email, verificationCode)
 	if err != nil {
 		ctx.JSON(500, gin.H{"error": "Failed to send verification email", "message": err.Error()})
 		return
 	}
 
-	ctx.JSON(200, gin.H{"message": "Sign-up successful. Please verify your email."})
+	// Return user details
+	ctx.JSON(200, gin.H{
+		"message": "Sign-up successful. Please verify your email.",
+		"user": gin.H{
+			"id":              newUser.ID.Hex(),
+			"email":           newUser.Email,
+			"displayName":     newUser.DisplayName,
+			"nickname":        newUser.Nickname,
+			"bio":             newUser.Bio,
+			"rating":          newUser.Rating,
+			"rd":              newUser.RD,
+			"volatility":      newUser.Volatility,
+			"lastRatingUpdate": newUser.LastRatingUpdate.Format(time.RFC3339),
+			"avatarUrl":       newUser.AvatarURL,
+			"twitter":         newUser.Twitter,
+			"instagram":       newUser.Instagram,
+			"linkedin":        newUser.LinkedIn,
+			"isVerified":      newUser.IsVerified,
+			"createdAt":       newUser.CreatedAt.Format(time.RFC3339),
+			"updatedAt":       newUser.UpdatedAt.Format(time.RFC3339),
+		},
+	})
 }
 
 func VerifyEmail(ctx *gin.Context) {
@@ -190,8 +249,13 @@ func VerifyEmail(ctx *gin.Context) {
 	}
 
 	// Update user verification status
+	now := time.Now()
 	update := bson.M{
-		"$set": bson.M{"isVerified": true, "verificationCode": "", "updatedAt": time.Now()},
+		"$set": bson.M{
+			"isVerified":       true,
+			"verificationCode": "",
+			"updatedAt":        now,
+		},
 	}
 	_, err = db.MongoDatabase.Collection("users").UpdateOne(dbCtx, bson.M{"email": request.Email}, update)
 	if err != nil {
@@ -199,7 +263,28 @@ func VerifyEmail(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, gin.H{"message": "Email verification successful"})
+	// Return updated user details
+	ctx.JSON(200, gin.H{
+		"message": "Email verification successful",
+		"user": gin.H{
+			"id":              user.ID.Hex(),
+			"email":           user.Email,
+			"displayName":     user.DisplayName,
+			"nickname":        user.Nickname,
+			"bio":             user.Bio,
+			"rating":          user.Rating,
+			"rd":              user.RD,
+			"volatility":      user.Volatility,
+			"lastRatingUpdate": user.LastRatingUpdate.Format(time.RFC3339),
+			"avatarUrl":       user.AvatarURL,
+			"twitter":         user.Twitter,
+			"instagram":       user.Instagram,
+			"linkedin":        user.LinkedIn,
+			"isVerified":      true,
+			"createdAt":       user.CreatedAt.Format(time.RFC3339),
+			"updatedAt":       now.Format(time.RFC3339),
+		},
+	})
 }
 
 func Login(ctx *gin.Context) {
@@ -244,9 +329,28 @@ func Login(ctx *gin.Context) {
 		return
 	}
 
+	// Return user details
 	ctx.JSON(http.StatusOK, gin.H{
 		"message":     "Sign-in successful",
 		"accessToken": token,
+		"user": gin.H{
+			"id":              user.ID.Hex(),
+			"email":           user.Email,
+			"displayName":     user.DisplayName,
+			"nickname":        user.Nickname,
+			"bio":             user.Bio,
+			"rating":          user.Rating,
+			"rd":              user.RD,
+			"volatility":      user.Volatility,
+			"lastRatingUpdate": user.LastRatingUpdate.Format(time.RFC3339),
+			"avatarUrl":       user.AvatarURL,
+			"twitter":         user.Twitter,
+			"instagram":       user.Instagram,
+			"linkedin":        user.LinkedIn,
+			"isVerified":      user.IsVerified,
+			"createdAt":       user.CreatedAt.Format(time.RFC3339),
+			"updatedAt":       user.UpdatedAt.Format(time.RFC3339),
+		},
 	})
 }
 
@@ -276,8 +380,12 @@ func ForgotPassword(ctx *gin.Context) {
 	resetCode := utils.GenerateRandomCode(6)
 
 	// Update user with reset code
+	now := time.Now()
 	update := bson.M{
-		"$set": bson.M{"resetPasswordCode": resetCode, "updatedAt": time.Now()},
+		"$set": bson.M{
+			"resetPasswordCode": resetCode,
+			"updatedAt":         now,
+		},
 	}
 	_, err = db.MongoDatabase.Collection("users").UpdateOne(dbCtx, bson.M{"email": request.Email}, update)
 	if err != nil {
@@ -325,11 +433,12 @@ func VerifyForgotPassword(ctx *gin.Context) {
 	}
 
 	// Update user with new password
+	now := time.Now()
 	update := bson.M{
 		"$set": bson.M{
 			"password":          string(hashedPassword),
 			"resetPasswordCode": "",
-			"updatedAt":         time.Now(),
+			"updatedAt":         now,
 		},
 	}
 	_, err = db.MongoDatabase.Collection("users").UpdateOne(dbCtx, bson.M{"email": request.Email}, update)
@@ -377,7 +486,28 @@ func VerifyToken(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(200, gin.H{"message": "Token is valid"})
+	// Return user details
+	ctx.JSON(200, gin.H{
+		"message": "Token is valid",
+		"user": gin.H{
+			"id":              user.ID.Hex(),
+			"email":           user.Email,
+			"displayName":     user.DisplayName,
+			"nickname":        user.Nickname,
+			"bio":             user.Bio,
+			"rating":          user.Rating,
+			"rd":              user.RD,
+			"volatility":      user.Volatility,
+			"lastRatingUpdate": user.LastRatingUpdate.Format(time.RFC3339),
+			"avatarUrl":       user.AvatarURL,
+			"twitter":         user.Twitter,
+			"instagram":       user.Instagram,
+			"linkedin":        user.LinkedIn,
+			"isVerified":      user.IsVerified,
+			"createdAt":       user.CreatedAt.Format(time.RFC3339),
+			"updatedAt":       user.UpdatedAt.Format(time.RFC3339),
+		},
+	})
 }
 
 // Helper function to generate JWT
@@ -420,4 +550,16 @@ func loadConfig(ctx *gin.Context) *config.Config {
 		return nil
 	}
 	return cfg
+}
+
+// GetMatchmakingPoolStatus returns the current matchmaking pool status (debug endpoint)
+func GetMatchmakingPoolStatus(ctx *gin.Context) {
+	matchmakingService := services.GetMatchmakingService()
+	pool := matchmakingService.GetPool()
+	
+	ctx.JSON(200, gin.H{
+		"pool":        pool,
+		"poolSize":    len(pool),
+		"timestamp":   time.Now().Format(time.RFC3339),
+	})
 }
