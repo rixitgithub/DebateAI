@@ -33,6 +33,15 @@ func main() {
 		log.Fatalf("Failed to connect to MongoDB: %v", err)
 	}
 	log.Println("Connected to MongoDB")
+
+	// Connect to Redis (optional - server can run without it for testing)
+	if err := db.ConnectRedis(cfg.Redis.Addr, cfg.Redis.Password, cfg.Redis.DB); err != nil {
+		log.Printf("⚠️  Warning: Failed to connect to Redis: %v", err)
+		log.Printf("⚠️  Server will continue but likes and rate limiting features will not work")
+		log.Printf("⚠️  To enable these features, start Redis server")
+	} else {
+		log.Println("Connected to Redis")
+	}
 	
 	// Start the room watching service for matchmaking after DB connection
 	go websocket.WatchForNewRooms()
@@ -124,6 +133,10 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		routes.SetupTeamChatRoutes(auth)
 		routes.SetupTeamMatchmakingRoutes(auth)
 		log.Println("Team routes registered")
+
+		// Community routes
+		routes.SetupCommunityRoutes(auth)
+		log.Println("Community routes registered")
 	}
 
 	// Team WebSocket handler
