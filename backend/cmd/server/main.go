@@ -86,6 +86,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 
 	// WebSocket routes (handle auth internally)
 	router.GET("/ws/matchmaking", websocket.MatchmakingHandler)
+	router.GET("/ws/gamification", websocket.GamificationWebSocketHandler)
 
 	// Protected routes (JWT auth)
 	auth := router.Group("/")
@@ -94,7 +95,12 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		auth.GET("/user/fetchprofile", routes.GetProfileRouteHandler)
 		auth.PUT("/user/updateprofile", routes.UpdateProfileRouteHandler)
 		auth.GET("/leaderboard", routes.GetLeaderboardRouteHandler)
-		auth.POST("/debate/result", routes.UpdateRatingAfterDebateRouteHandler) 
+		auth.POST("/debate/result", routes.UpdateRatingAfterDebateRouteHandler)
+		
+		// Gamification routes
+		auth.POST("/api/award-badge", routes.AwardBadgeRouteHandler)
+		auth.POST("/api/update-score", routes.UpdateScoreRouteHandler)
+		auth.GET("/api/leaderboard", routes.GetGamificationLeaderboardRouteHandler) 
 		routes.SetupDebateVsBotRoutes(auth)
 
 		// WebSocket signaling endpoint (handles auth internally)

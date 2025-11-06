@@ -46,7 +46,7 @@ Provide ONLY the JSON output without additional text or markdown formatting.`,
 	)
 
 	ctx := context.Background()
-	model := geminiClient.GenerativeModel("gemini-1.5-flash")
+	model := geminiClient.GenerativeModel("gemini-2.5-flash")
 
 	// Set safety settings to BLOCK_NONE
 	model.SafetySettings = []*genai.SafetySetting{
@@ -144,7 +144,7 @@ Provide ONLY the JSON output without additional text or markdown formatting.`,
 	)
 
 	ctx := context.Background()
-	model := geminiClient.GenerativeModel("gemini-1.5-flash")
+	model := geminiClient.GenerativeModel("gemini-2.5-flash")
 
 	model.SafetySettings = []*genai.SafetySetting{
 		{Category: genai.HarmCategoryHarassment, Threshold: genai.HarmBlockNone},

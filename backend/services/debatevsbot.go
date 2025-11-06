@@ -268,7 +268,7 @@ func GenerateBotResponse(botName, botLevel, topic string, history []models.Messa
 	prompt := constructPrompt(bot, topic, history, stance, extraContext, maxWords)
 
 	ctx := context.Background()
-	model := geminiClient.GenerativeModel("gemini-1.5-flash")
+	model := geminiClient.GenerativeModel("gemini-2.5-flash")
 
 	// Set safety settings to BLOCK_NONE for all categories
 	model.SafetySettings = []*genai.SafetySetting{
@@ -481,7 +481,7 @@ Provide ONLY the JSON output without any additional text.`,
 		bot.DebateStrategy, strings.Join(bot.SignatureMoves, ", "), strings.Join(bot.PhilosophicalTenets, ", "), FormatHistory(history))
 
 	ctx := context.Background()
-	model := geminiClient.GenerativeModel("gemini-1.5-flash")
+	model := geminiClient.GenerativeModel("gemini-2.5-flash")
 
 	model.SafetySettings = []*genai.SafetySetting{
 		{Category: genai.HarmCategoryHarassment, Threshold: genai.HarmBlockNone},

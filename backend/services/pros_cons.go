@@ -34,7 +34,7 @@ Examples:
 	)
 
 	ctx := context.Background()
-	model := geminiClient.GenerativeModel("gemini-1.5-flash")
+	model := geminiClient.GenerativeModel("gemini-2.5-flash")
 
 	// Set safety settings to prevent inappropriate content
 	model.SafetySettings = []*genai.SafetySetting{
@@ -112,7 +112,7 @@ Required Output Format (JSON):
 	)
 
 	ctx := context.Background()
-	model := geminiClient.GenerativeModel("gemini-1.5-flash")
+	model := geminiClient.GenerativeModel("gemini-2.5-flash")
 	model.SafetySettings = []*genai.SafetySetting{
 		{Category: genai.HarmCategoryHarassment, Threshold: genai.HarmBlockNone},
 		{Category: genai.HarmCategoryHateSpeech, Threshold: genai.HarmBlockNone},
