@@ -24,6 +24,8 @@ import TournamentDetails from './Pages/TournamentDetails';
 import ProsConsChallenge from './Pages/ProsConsChallenge';
 import TeamBuilder from './Pages/TeamBuilder';
 import TeamDebateRoom from './Pages/TeamDebateRoom';
+import AdminSignup from './Pages/Admin/AdminSignup';
+import AdminDashboard from './Pages/Admin/AdminDashboard';
 
 // Protects routes based on authentication status
 function ProtectedRoute() {
@@ -55,6 +57,8 @@ function AppRoutes() {
         }
       />
       <Route path='/auth' element={<Authentication />} />
+      <Route path='/admin/login' element={<AdminSignup />} />
+      <Route path='/admin/dashboard' element={<AdminDashboard />} />
       {/* Protected routes with layout */}
       <Route element={<ProtectedRoute />}>
         <Route path='/' element={<Layout />}>

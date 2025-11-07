@@ -34,6 +34,12 @@ func main() {
 	}
 	log.Println("Connected to MongoDB")
 	
+	// Initialize Casbin RBAC
+	if err := middlewares.InitCasbin("./config/config.prod.yml"); err != nil {
+		log.Fatalf("Failed to initialize Casbin: %v", err)
+	}
+	log.Println("Casbin RBAC initialized")
+	
 	// Start the room watching service for matchmaking after DB connection
 	go websocket.WatchForNewRooms()
 
@@ -128,6 +134,10 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 
 	// Team WebSocket handler
 	router.GET("/ws/team", websocket.TeamWebsocketHandler)
+
+	// Admin routes
+	routes.SetupAdminRoutes(router, "./config/config.prod.yml")
+	log.Println("Admin routes registered")
 
 	return router
 }
