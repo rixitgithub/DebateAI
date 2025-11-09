@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,7 +19,6 @@ import (
 	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"strings"
 )
 
 // TeamRoom represents a team debate room with connected team members
