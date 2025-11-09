@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import PlayerCard from "../components/PlayerCard";
 import UserCamera from "../components/UserCamera";
-import Chatbox, { ChatMessage } from "../components/Chatbox";
+import Chatbox, { ChatMessage, TypingIndicator } from "../components/Chatbox";
 
 const Game: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -28,9 +28,21 @@ const Game: React.FC = () => {
       loading: false,
       isUser: false,
     },
+    typingIndicators: [] as TypingIndicator[],
   });
 
   const websocketRef = useRef<WebSocket | null>(null);
+  const lastTypingStateRef = useRef<boolean>(false);
+  const lastSpeakingStateRef = useRef<boolean>(false);
+
+  const sendWebSocketMessage = useCallback((payload: Record<string, unknown>) => {
+    const ws = websocketRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    } else {
+      console.warn("Attempted to send message while WebSocket was not open.", payload);
+    }
+  }, []);
 
   const handleWebSocketMessage = (message: any) => {
     switch (message.type) {
@@ -66,6 +78,9 @@ const Game: React.FC = () => {
           ...prevState,
           messages: [...prevState.messages, newMessage],
           transcriptStatus: { ...prevState.transcriptStatus, loading: false },
+          typingIndicators: prevState.typingIndicators.filter(
+            (indicator) => indicator.userId !== sender
+          ),
         }));
         break;
       }
@@ -86,12 +101,52 @@ const Game: React.FC = () => {
           ...prevState,
           gameResult: {
             isReady: true,
-            isWinner: winnerUserId == userId,
+            isWinner: winnerUserId === userId,
             points: points,
             totalPoints: totalPoints,
             evaluationMessage: evaluationMessage,
           },
         }));
+        break;
+      }
+      case "TYPING_STATUS":
+      case "SPEAKING_STATUS": {
+        try {
+          const {
+            sender,
+            username,
+            isTyping = false,
+            isSpeaking = false,
+            partialText,
+          } = JSON.parse(message.content);
+
+          if (!sender || sender === userId) {
+            break;
+          }
+
+          setState((prevState) => {
+            const remainingIndicators = prevState.typingIndicators.filter(
+              (indicator) => indicator.userId !== sender
+            );
+
+            if (isTyping || isSpeaking) {
+              remainingIndicators.push({
+                userId: sender,
+                username: username || "Opponent",
+                isTyping: Boolean(isTyping),
+                isSpeaking: Boolean(isSpeaking),
+                partialText: partialText,
+              });
+            }
+
+            return {
+              ...prevState,
+              typingIndicators: remainingIndicators,
+            };
+          });
+        } catch (error) {
+          console.error("Failed to handle participant activity message:", error);
+        }
         break;
       }
 
@@ -113,6 +168,62 @@ const Game: React.FC = () => {
 
     return () => ws.close();
   }, [userId]);
+
+  const handleSendChatMessage = useCallback(
+    (messageText: string, mode: "type" | "speak") => {
+      const trimmed = messageText.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      sendWebSocketMessage({
+        type: "CHAT_MESSAGE",
+        content: JSON.stringify({
+          sender: userId,
+          message: trimmed,
+          mode,
+        }),
+      });
+    },
+    [sendWebSocketMessage, userId]
+  );
+
+  const handleTypingChange = useCallback(
+    (isTyping: boolean, partialText?: string) => {
+      if (lastTypingStateRef.current === isTyping && !partialText) {
+        return;
+      }
+
+      lastTypingStateRef.current = isTyping;
+      sendWebSocketMessage({
+        type: "TYPING_STATUS",
+        content: JSON.stringify({
+          sender: userId,
+          isTyping,
+          partialText,
+        }),
+      });
+    },
+    [sendWebSocketMessage, userId]
+  );
+
+  const handleSpeakingChange = useCallback(
+    (isSpeaking: boolean) => {
+      if (lastSpeakingStateRef.current === isSpeaking) {
+        return;
+      }
+
+      lastSpeakingStateRef.current = isSpeaking;
+      sendWebSocketMessage({
+        type: "SPEAKING_STATUS",
+        content: JSON.stringify({
+          sender: userId,
+          isSpeaking,
+        }),
+      });
+    },
+    [sendWebSocketMessage, userId]
+  );
 
   const renderGameContent = () => (
     <div className="w-screen h-screen flex justify-center items-center">
@@ -186,12 +297,12 @@ const Game: React.FC = () => {
         <Chatbox
           messages={state.messages}
           transcriptStatus={state.transcriptStatus}
-          onSendMessage={() => {}}
-          onTypingChange={() => {}}
-          onSpeakingChange={() => {}}
-          typingIndicators={[]}
-          isMyTurn={true}
-          disabled={true}
+          onSendMessage={handleSendChatMessage}
+          onTypingChange={handleTypingChange}
+          onSpeakingChange={handleSpeakingChange}
+          typingIndicators={state.typingIndicators}
+          isMyTurn={state.isTurn}
+          disabled={state.gameEnded || state.loading}
         />
       </div>
     </div>

@@ -190,6 +190,27 @@ const TeamDebateRoom: React.FC = () => {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(true);
 
+  // Refs mirroring frequently used reactive state inside WebSocket handlers
+  const isTeam1Ref = useRef(isTeam1);
+  useEffect(() => {
+    isTeam1Ref.current = isTeam1;
+  }, [isTeam1]);
+
+  const myTeamIdRef = useRef<string | null>(myTeamId);
+  useEffect(() => {
+    myTeamIdRef.current = myTeamId;
+  }, [myTeamId]);
+
+  const debatePhaseRef = useRef<DebatePhase>(debatePhase);
+  useEffect(() => {
+    debatePhaseRef.current = debatePhase;
+  }, [debatePhase]);
+
+  const currentUserIdRef = useRef<string | undefined>(currentUser?.id);
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id;
+  }, [currentUser?.id]);
+
   // Timer state
   const [timer, setTimer] = useState<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -408,6 +429,10 @@ const TeamDebateRoom: React.FC = () => {
     ws.onmessage = async (event) => {
       const data: WSMessage = JSON.parse(event.data);
       console.log("Received WebSocket message:", data);
+      const amTeam1 = isTeam1Ref.current;
+      const currentMyTeamId = myTeamIdRef.current;
+      const currentUserId = currentUserIdRef.current;
+      const currentPhase = debatePhaseRef.current;
 
       switch (data.type) {
         case "stateSync":
@@ -420,7 +445,7 @@ const TeamDebateRoom: React.FC = () => {
             if (debateStartedRef.current && backendPhase === DebatePhase.Setup) {
               console.log('⚠️ stateSync tried to reset phase to Setup, but debate has started - ignoring');
             } else {
-              console.log(`stateSync: updating phase from ${debatePhase} to ${backendPhase}`);
+              console.log(`stateSync: updating phase from ${currentPhase} to ${backendPhase}`);
               setDebatePhase(backendPhase);
               // If backend says phase is not Setup, mark debate as started
               if (backendPhase !== DebatePhase.Setup) {
@@ -431,7 +456,7 @@ const TeamDebateRoom: React.FC = () => {
           // Set roles based on which team the user is on
           // If user is Team1, their role is team1Role, opponent role is team2Role
           // If user is Team2, their role is team2Role, opponent role is team1Role
-          if (isTeam1) {
+          if (amTeam1) {
             if (data.team1Role) {
               setLocalRole(data.team1Role as DebateRole);
             }
@@ -453,14 +478,14 @@ const TeamDebateRoom: React.FC = () => {
           
           // Update team names if provided (for late joiners)
           if ((data as any).team1Name) {
-            if (isTeam1) {
+            if (amTeam1) {
               setMyTeamName((data as any).team1Name);
             } else {
               setOpponentTeamName((data as any).team1Name);
             }
           }
           if ((data as any).team2Name) {
-            if (isTeam1) {
+            if (amTeam1) {
               setOpponentTeamName((data as any).team2Name);
             } else {
               setMyTeamName((data as any).team2Name);
@@ -491,32 +516,32 @@ const TeamDebateRoom: React.FC = () => {
           
           // Check if opponent team members are all ready (but don't override localReady)
           // localReady should only be set when the user clicks the ready button
-          const opponentReady = isTeam1 ? data.team2Ready : data.team1Ready;
-          const opponentCount = isTeam1 ? data.team2MembersCount : data.team1MembersCount;
+          const opponentReady = amTeam1 ? data.team2Ready : data.team1Ready;
+          const opponentCount = amTeam1 ? data.team2MembersCount : data.team1MembersCount;
           setPeerReady(opponentReady === opponentCount && opponentCount > 0);
           
           // Update localReady if we have the user's ready status in stateSync
-          if (currentUser?.id) {
+          if (currentUserId) {
             const team1Status = (data as any).team1ReadyStatus as Record<string, boolean> | undefined;
             const team2Status = (data as any).team2ReadyStatus as Record<string, boolean> | undefined;
-            if (isTeam1 && team1Status && team1Status[currentUser.id] !== undefined) {
-              setLocalReady(team1Status[currentUser.id]);
-            } else if (!isTeam1 && team2Status && team2Status[currentUser.id] !== undefined) {
-              setLocalReady(team2Status[currentUser.id]);
+            if (amTeam1 && team1Status && team1Status[currentUserId] !== undefined) {
+              setLocalReady(team1Status[currentUserId]);
+            } else if (!amTeam1 && team2Status && team2Status[currentUserId] !== undefined) {
+              setLocalReady(team2Status[currentUserId]);
             }
           }
           
           break;
         case "teamMembers":
           if (data.team1Members) {
-            if (isTeam1) {
+            if (amTeam1) {
               setMyTeamMembers(data.team1Members);
             } else {
               setOpponentTeamMembers(data.team1Members);
             }
           }
           if (data.team2Members) {
-            if (isTeam1) {
+            if (amTeam1) {
               setOpponentTeamMembers(data.team2Members);
             } else {
               setMyTeamMembers(data.team2Members);
@@ -553,7 +578,10 @@ const TeamDebateRoom: React.FC = () => {
           if (data.role && data.teamId) {
             // Determine if this is from our team or opponent team based on teamId
             const messageTeamId = data.teamId;
-            const isFromMyTeam = messageTeamId === myTeamId;
+            const isFromMyTeam =
+              currentMyTeamId !== null
+                ? messageTeamId === currentMyTeamId
+                : false;
             
             if (isFromMyTeam) {
               // This role selection is from my team
@@ -582,25 +610,25 @@ const TeamDebateRoom: React.FC = () => {
         case "ready":
           console.log("=== READY MESSAGE RECEIVED ===");
           console.log("Received ready message:", data);
-          console.log("Current user:", currentUser?.id);
+          console.log("Current user:", currentUserId);
           console.log("Message userId:", data.userId);
           console.log("Message teamId:", data.teamId);
           console.log("Message assignedToTeam:", (data as any).assignedToTeam);
-          console.log("isTeam1:", isTeam1);
-          console.log("myTeamId:", myTeamId);
+          console.log("isTeam1:", amTeam1);
+          console.log("myTeamId:", currentMyTeamId);
           console.log("Team1Ready:", data.team1Ready, "Team2Ready:", data.team2Ready);
           console.log("Team1MembersCount:", data.team1MembersCount, "Team2MembersCount:", data.team2MembersCount);
           
           // CRITICAL: Verify the ready status is assigned to the correct team
           const messageTeamId = data.teamId;
-          const expectedTeamId = myTeamId; // Should be the same regardless of isTeam1
+          const expectedTeamId = currentMyTeamId; // Should be the same regardless of isTeam1
           const assignedTeam = (data as any).assignedToTeam;
           
           // Update the ready status for the specific user who clicked
-          if (data.userId === currentUser?.id && data.ready !== undefined) {
+          if (data.userId === currentUserId && data.ready !== undefined) {
             // Verify team assignment matches
-            if (assignedTeam && assignedTeam !== (isTeam1 ? "Team1" : "Team2")) {
-              console.error(`❌ CRITICAL ERROR: Ready status assigned to wrong team! User ${data.userId} is ${isTeam1 ? "Team1" : "Team2"} but assigned to ${assignedTeam}`);
+            if (assignedTeam && assignedTeam !== (amTeam1 ? "Team1" : "Team2")) {
+              console.error(`❌ CRITICAL ERROR: Ready status assigned to wrong team! User ${data.userId} is ${amTeam1 ? "Team1" : "Team2"} but assigned to ${assignedTeam}`);
             } else if (messageTeamId && expectedTeamId && messageTeamId !== expectedTeamId) {
               console.error(`❌ WARNING: TeamId mismatch! Expected ${expectedTeamId}, got ${messageTeamId}`);
             } else {
@@ -646,12 +674,12 @@ const TeamDebateRoom: React.FC = () => {
           // CRITICAL: Each user should see their own team correctly
           // Use (data as any) to access fields that might not be in TypeScript interface
           const dataAny = data as any;
-          const myTeamReadyCount = isTeam1 ? (data.team1Ready ?? dataAny.team1Ready) : (data.team2Ready ?? dataAny.team2Ready);
-          const myTeamTotal = isTeam1 ? (data.team1MembersCount ?? dataAny.team1MembersCount) : (data.team2MembersCount ?? dataAny.team2MembersCount);
-          const oppReadyCount = isTeam1 ? (data.team2Ready ?? dataAny.team2Ready) : (data.team1Ready ?? dataAny.team1Ready);
-          const oppTeamTotal = isTeam1 ? (data.team2MembersCount ?? dataAny.team2MembersCount) : (data.team1MembersCount ?? dataAny.team1MembersCount);
+          const myTeamReadyCount = amTeam1 ? (data.team1Ready ?? dataAny.team1Ready) : (data.team2Ready ?? dataAny.team2Ready);
+          const myTeamTotal = amTeam1 ? (data.team1MembersCount ?? dataAny.team1MembersCount) : (data.team2MembersCount ?? dataAny.team2MembersCount);
+          const oppReadyCount = amTeam1 ? (data.team2Ready ?? dataAny.team2Ready) : (data.team1Ready ?? dataAny.team1Ready);
+          const oppTeamTotal = amTeam1 ? (data.team2MembersCount ?? dataAny.team2MembersCount) : (data.team1MembersCount ?? dataAny.team1MembersCount);
           
-          console.log(`[Display] isTeam1=${isTeam1}, myTeamName=${myTeamName}`);
+          console.log(`[Display] isTeam1=${amTeam1}, myTeamName=${myTeamName}`);
           console.log(`[Display] My Team (${myTeamName}) Ready: ${myTeamReadyCount}/${myTeamTotal}`);
           console.log(`[Display] Opponent Team (${opponentTeamName}) Ready: ${oppReadyCount}/${oppTeamTotal}`);
           console.log(`[Display] Backend counts - Team1Ready=${data.team1Ready}, Team2Ready=${data.team2Ready}`);
@@ -659,10 +687,10 @@ const TeamDebateRoom: React.FC = () => {
           console.log(`[Display] Full ready message data:`, JSON.stringify(data));
           
           // Validation: Ensure we're showing the right team
-          if (data.userId === currentUser?.id && assignedTeam) {
-            const expectedTeamForUser = isTeam1 ? "Team1" : "Team2";
+          if (data.userId === currentUserId && assignedTeam) {
+            const expectedTeamForUser = amTeam1 ? "Team1" : "Team2";
             if (assignedTeam !== expectedTeamForUser) {
-              console.error(`❌ CRITICAL: User ${currentUser?.id} is ${isTeam1 ? "Team1" : "Team2"} but ready assigned to ${assignedTeam}!`);
+              console.error(`❌ CRITICAL: User ${currentUserId} is ${amTeam1 ? "Team1" : "Team2"} but ready assigned to ${assignedTeam}!`);
             } else {
               console.log(`✓ Validation passed: User is ${expectedTeamForUser} and ready assigned to ${assignedTeam}`);
             }
@@ -676,7 +704,7 @@ const TeamDebateRoom: React.FC = () => {
         case "phaseChange":
           if (data.phase) {
             const newPhase = data.phase as DebatePhase;
-            console.log(`✓✓✓ RECEIVED PHASE CHANGE: ${newPhase} (previous: ${debatePhase})`);
+            console.log(`✓✓✓ RECEIVED PHASE CHANGE: ${newPhase} (previous: ${currentPhase})`);
             console.log(`Phase change data:`, data);
             
             // Ensure we accept the phase change
@@ -697,7 +725,7 @@ const TeamDebateRoom: React.FC = () => {
           break;
         case "speechText":
           if (data.userId && data.speechText) {
-            const targetPhase = data.phase || debatePhase;
+            const targetPhase = data.phase || currentPhase;
             setSpeechTranscripts((prev) => ({
             ...prev,
               [targetPhase]:
@@ -709,7 +737,7 @@ const TeamDebateRoom: React.FC = () => {
           if (
             data.userId &&
             data.liveTranscript &&
-            data.userId !== currentUser?.id
+            data.userId !== currentUserId
           ) {
             setCurrentTranscript(data.liveTranscript);
           }
@@ -717,14 +745,14 @@ const TeamDebateRoom: React.FC = () => {
         case "teamStatus":
           // Update team member status
           if (data.team1Members) {
-            if (isTeam1) {
+            if (amTeam1) {
               setMyTeamMembers(data.team1Members);
             } else {
               setOpponentTeamMembers(data.team1Members);
             }
           }
           if (data.team2Members) {
-            if (isTeam1) {
+            if (amTeam1) {
               setOpponentTeamMembers(data.team2Members);
             } else {
               setMyTeamMembers(data.team2Members);
@@ -756,7 +784,9 @@ const TeamDebateRoom: React.FC = () => {
         localStreamRef.current = stream;
         
         // Attach local stream to video element
-        const localVideo = localVideoRefs.current.get(currentUser?.id || "");
+        const localVideo = localVideoRefs.current.get(
+          currentUserIdRef.current || ""
+        );
         if (localVideo) {
           localVideo.srcObject = stream;
         }
@@ -777,7 +807,7 @@ const TeamDebateRoom: React.FC = () => {
       }
       pcRefs.current.forEach((pc) => pc.close());
     };
-  }, [debateId, isTeam1, debatePhase, currentUser?.id, debate]); // Include currentUser?.id and debate in dependencies
+  }, [debateId, currentUser?.id]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -919,6 +949,26 @@ const TeamDebateRoom: React.FC = () => {
       }
     }
   }, [isListening]);
+
+  const toggleCamera = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) {
+      console.warn("[TeamDebateRoom] toggleCamera called without local stream");
+      return;
+    }
+
+    const [videoTrack] = stream.getVideoTracks();
+    if (!videoTrack) {
+      console.warn("[TeamDebateRoom] No video track available to toggle");
+      return;
+    }
+
+    setIsCameraOn((prev) => {
+      const next = !prev;
+      videoTrack.enabled = next;
+      return next;
+    });
+  }, []);
 
   // Auto start/stop speech recognition based on turn
   useEffect(() => {

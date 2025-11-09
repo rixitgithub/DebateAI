@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -20,54 +21,98 @@ func GetAnalytics(ctx *gin.Context) {
 	dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	countDocuments := func(collection *mongo.Collection, filter interface{}, metric string) (int64, bool) {
+		count, err := collection.CountDocuments(dbCtx, filter)
+		if err != nil {
+			log.Printf("Failed to count %s: %v", metric, err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to fetch analytics",
+				"message": err.Error(),
+				"metric":  metric,
+			})
+			return 0, false
+		}
+		return count, true
+	}
+
 	now := time.Now()
 	thirtyDaysAgo := now.AddDate(0, 0, -30)
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	// Get total debates
 	debatesCollection := db.MongoDatabase.Collection("debates")
-	totalDebates, _ := debatesCollection.CountDocuments(dbCtx, bson.M{})
+	totalDebates, ok := countDocuments(debatesCollection, bson.M{}, "debates")
+	if !ok {
+		return
+	}
 
 	// Get bot debates
 	botDebatesCollection := db.MongoDatabase.Collection("debates_vs_bot")
-	totalBotDebates, _ := botDebatesCollection.CountDocuments(dbCtx, bson.M{})
+	totalBotDebates, ok := countDocuments(botDebatesCollection, bson.M{}, "bot debates")
+	if !ok {
+		return
+	}
 	totalDebates += totalBotDebates
 
 	// Get debates today
-	debatesToday, _ := debatesCollection.CountDocuments(dbCtx, bson.M{
+	debatesToday, ok := countDocuments(debatesCollection, bson.M{
 		"date": bson.M{"$gte": todayStart},
-	})
+	}, "debates today")
+	if !ok {
+		return
+	}
 
 	// Get active users (users active in last 30 days)
 	usersCollection := db.MongoDatabase.Collection("users")
-	activeUsers, _ := usersCollection.CountDocuments(dbCtx, bson.M{
+	activeUsers, ok := countDocuments(usersCollection, bson.M{
 		"updatedAt": bson.M{"$gte": thirtyDaysAgo},
-	})
+	}, "active users")
+	if !ok {
+		return
+	}
 
 	// Get total users
-	totalUsers, _ := usersCollection.CountDocuments(dbCtx, bson.M{})
+	totalUsers, ok := countDocuments(usersCollection, bson.M{}, "users")
+	if !ok {
+		return
+	}
 
 	// Get new users today
-	newUsersToday, _ := usersCollection.CountDocuments(dbCtx, bson.M{
+	newUsersToday, ok := countDocuments(usersCollection, bson.M{
 		"createdAt": bson.M{"$gte": todayStart},
-	})
+	}, "new users today")
+	if !ok {
+		return
+	}
 
 	// Get total comments (team debate messages + team chat messages)
 	teamDebateMessagesCollection := db.MongoDatabase.Collection("team_debate_messages")
-	totalTeamDebateMessages, _ := teamDebateMessagesCollection.CountDocuments(dbCtx, bson.M{})
+	totalTeamDebateMessages, ok := countDocuments(teamDebateMessagesCollection, bson.M{}, "team debate messages")
+	if !ok {
+		return
+	}
 
 	teamChatMessagesCollection := db.MongoDatabase.Collection("team_chat_messages")
-	totalTeamChatMessages, _ := teamChatMessagesCollection.CountDocuments(dbCtx, bson.M{})
+	totalTeamChatMessages, ok := countDocuments(teamChatMessagesCollection, bson.M{}, "team chat messages")
+	if !ok {
+		return
+	}
 
 	totalComments := totalTeamDebateMessages + totalTeamChatMessages
 
 	// Get comments today
-	commentsToday, _ := teamDebateMessagesCollection.CountDocuments(dbCtx, bson.M{
+	commentsToday, ok := countDocuments(teamDebateMessagesCollection, bson.M{
 		"timestamp": bson.M{"$gte": todayStart},
-	})
-	chatCommentsToday, _ := teamChatMessagesCollection.CountDocuments(dbCtx, bson.M{
+	}, "team debate messages today")
+	if !ok {
+		return
+	}
+	chatCommentsToday, ok := countDocuments(teamChatMessagesCollection, bson.M{
 		"timestamp": bson.M{"$gte": todayStart},
-	})
+	}, "team chat messages today")
+	if !ok {
+		return
+	}
 	commentsToday += chatCommentsToday
 
 	// Create analytics snapshot
@@ -85,7 +130,9 @@ func GetAnalytics(ctx *gin.Context) {
 
 	// Save snapshot to database (optional, for historical tracking)
 	snapshotsCollection := db.MongoDatabase.Collection("analytics_snapshots")
-	snapshotsCollection.InsertOne(dbCtx, snapshot)
+	if _, err := snapshotsCollection.InsertOne(dbCtx, snapshot); err != nil {
+		log.Printf("Failed to persist analytics snapshot: %v", err)
+	}
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"totalDebates":  snapshot.TotalDebates,
@@ -216,6 +263,21 @@ func GetAnalyticsHistory(ctx *gin.Context) {
 func GetAdminActionLogs(ctx *gin.Context) {
 	page := 1
 	limit := 50
+	if pageStr := ctx.Query("page"); pageStr != "" {
+		if parsed, err := strconv.Atoi(pageStr); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if limitStr := ctx.Query("limit"); limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+			const maxLimit = 200
+			if parsed > maxLimit {
+				limit = maxLimit
+			} else {
+				limit = parsed
+			}
+		}
+	}
 
 	dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -237,7 +299,11 @@ func GetAdminActionLogs(ctx *gin.Context) {
 		return
 	}
 
-	total, _ := logsCollection.CountDocuments(dbCtx, bson.M{})
+	total, err := logsCollection.CountDocuments(dbCtx, bson.M{})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch logs", "message": err.Error()})
+		return
+	}
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"logs":  logs,
