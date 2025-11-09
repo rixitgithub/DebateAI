@@ -7,9 +7,9 @@ import {
   questionsAtom,
   reactionsAtom,
   wsStatusAtom,
-  lastEventIdAtom,
   presenceAtom,
   spectatorHashAtom,
+  PollInfo,
 } from '../atoms/debateAtoms';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 
@@ -20,13 +20,12 @@ interface Event {
 }
 
 export const useDebateWS = (debateId: string | null) => {
-  const [ws, setWs] = useAtom(wsAtom);
+  const [, setWs] = useAtom(wsAtom);
   const [, setDebateId] = useAtom(debateIdAtom);
   const [, setPollState] = useAtom(pollStateAtom);
   const [, setQuestions] = useAtom(questionsAtom);
   const [, setReactions] = useAtom(reactionsAtom);
   const [, setWsStatus] = useAtom(wsStatusAtom);
-  const [, setLastEventId] = useAtom(lastEventIdAtom);
   const [, setPresence] = useAtom(presenceAtom);
   const [spectatorHash] = useAtom(spectatorHashAtom);
   const wsRef = useRef<ReconnectingWebSocket | null>(null);
@@ -91,25 +90,147 @@ export const useDebateWS = (debateId: string | null) => {
 
         // Route messages to atoms
         switch (eventData.type) {
-          case 'poll_snapshot':
-            if (eventData.payload.pollState) {
-              setPollState(eventData.payload.pollState);
+          case 'poll_snapshot': {
+            const payload = eventData.payload || {};
+            const pollsPayload = payload.polls;
+            if (Array.isArray(pollsPayload)) {
+              const nextState: Record<string, PollInfo> = {};
+              pollsPayload.forEach((poll) => {
+                if (!poll) return;
+                const pollId =
+                  typeof poll.pollId === 'string'
+                    ? poll.pollId
+                    : String(poll.pollId ?? '');
+                if (!pollId) return;
+                const countsRaw = poll.counts || {};
+                const counts: Record<string, number> = {};
+                if (countsRaw && typeof countsRaw === 'object') {
+                  Object.entries(countsRaw).forEach(([option, value]) => {
+                    const numericValue =
+                      typeof value === 'number'
+                        ? value
+                        : Number(value ?? 0) || 0;
+                    counts[option] = numericValue;
+                  });
+                }
+                let options: string[] = [];
+                if (Array.isArray(poll.options)) {
+                  options = poll.options
+                    .map((opt: unknown) => String(opt ?? '').trim())
+                    .filter((opt: string) => opt.length > 0);
+                }
+                if (options.length === 0) {
+                  options = Object.keys(counts);
+                }
+                const info: PollInfo = {
+                  pollId,
+                  question:
+                    typeof poll.question === 'string' ? poll.question : '',
+                  options,
+                  counts,
+                  voters:
+                    typeof poll.voters === 'number'
+                      ? poll.voters
+                      : Number(poll.voters ?? 0) || 0,
+                };
+                nextState[pollId] = info;
+              });
+              setPollState(nextState);
+            } else if (payload.pollState) {
+              // Backwards compatibility: convert legacy structure
+              const legacyState = payload.pollState as Record<
+                string,
+                Record<string, number>
+              >;
+              const legacyResult: Record<string, PollInfo> = {};
+              Object.entries(legacyState).forEach(([pollId, counts]) => {
+                const options = Object.keys(counts || {});
+                legacyResult[pollId] = {
+                  pollId,
+                  question: '',
+                  options,
+                  counts: counts || {},
+                  voters:
+                    typeof payload.votersCount?.[pollId] === 'number'
+                      ? payload.votersCount[pollId]
+                      : 0,
+                };
+              });
+              setPollState(legacyResult);
             }
             break;
+          }
 
           case 'vote':
             // Update poll state
             setPollState((prev) => {
-              const newState = { ...prev };
-              const pollId = eventData.payload.pollId;
-              const option = eventData.payload.option;
-              if (!newState[pollId]) {
-                newState[pollId] = {};
+              const pollId = eventData.payload?.pollId;
+              const option = eventData.payload?.option;
+              if (typeof pollId !== 'string' || typeof option !== 'string') {
+                return prev;
               }
-              newState[pollId][option] = (newState[pollId][option] || 0) + 1;
-              return newState;
+              const nextState = { ...prev };
+              const existing = nextState[pollId];
+              if (!existing) {
+                nextState[pollId] = {
+                  pollId,
+                  question: '',
+                  options: [option],
+                  counts: { [option]: 1 },
+                  voters: 0,
+                };
+                return nextState;
+              }
+              const nextCounts = { ...existing.counts };
+              nextCounts[option] = (nextCounts[option] || 0) + 1;
+              const nextOptions = existing.options.includes(option)
+                ? existing.options
+                : [...existing.options, option];
+              nextState[pollId] = {
+                ...existing,
+                options: nextOptions,
+                counts: nextCounts,
+              };
+              return nextState;
             });
             break;
+
+          case 'poll_created': {
+            const poll = eventData.payload;
+            if (poll && poll.pollId) {
+              setPollState((prev) => {
+                const pollId = String(poll.pollId);
+                const countsRaw = poll.counts || {};
+                const counts: Record<string, number> = {};
+                Object.entries(countsRaw).forEach(([option, value]) => {
+                  counts[option] =
+                    typeof value === 'number'
+                      ? value
+                      : Number(value ?? 0) || 0;
+                });
+                const options = Array.isArray(poll.options)
+                  ? poll.options
+                      .map((opt: unknown) => String(opt ?? '').trim())
+                      .filter((opt: string) => opt.length > 0)
+                  : Object.keys(counts);
+                return {
+                  ...prev,
+                  [pollId]: {
+                    pollId,
+                    question:
+                      typeof poll.question === 'string' ? poll.question : '',
+                    options,
+                    counts,
+                    voters:
+                      typeof poll.voters === 'number'
+                        ? poll.voters
+                        : Number(poll.voters ?? 0) || 0,
+                  },
+                };
+              });
+            }
+            break;
+          }
 
           case 'question':
             setQuestions((prev) => {
@@ -151,7 +272,7 @@ export const useDebateWS = (debateId: string | null) => {
       }
     };
 
-    rws.onerror = (error) => {
+    rws.onerror = (err) => {
       setWsStatus('error');
     };
 
@@ -168,13 +289,12 @@ export const useDebateWS = (debateId: string | null) => {
         setWsStatus('disconnected');
       }
     };
-  }, [debateId, spectatorHash, setWs, setDebateId, setPollState, setQuestions, setReactions, setWsStatus, setLastEventId, setPresence]);
+  }, [debateId, spectatorHash, setWs, setDebateId, setPollState, setQuestions, setReactions, setWsStatus, setPresence]);
 
   const sendMessage = (type: string, payload: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const message = JSON.stringify({ type, payload });
       wsRef.current.send(message);
-    } else {
     }
   };
 

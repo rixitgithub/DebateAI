@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useSpring, animated, config } from 'react-spring';
 import { useDebateWS } from '../hooks/useDebateWS';
 import { useAtom } from 'jotai';
@@ -53,7 +53,6 @@ export const ReactionBar: React.FC = () => {
   const [debateId] = useAtom(debateIdAtom);
   const [spectatorHash] = useAtom(spectatorHashAtom);
   const { sendMessage } = useDebateWS(debateId);
-  const [hasReacted, setHasReacted] = useState(false);
 
   const handleReaction = (emoji: string) => {
     if (!debateId || !spectatorHash) return;
@@ -65,10 +64,6 @@ export const ReactionBar: React.FC = () => {
     };
 
     sendMessage('reaction', payload);
-    setHasReacted(true);
-
-    // Reset after a short delay to allow multiple reactions
-    setTimeout(() => setHasReacted(false), 1000);
   };
 
   if (!debateId) return null;

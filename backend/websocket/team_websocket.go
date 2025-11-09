@@ -525,7 +525,6 @@ func handleTeamLiveTranscript(room *TeamRoom, conn *websocket.Conn, message Team
 func handleTeamPhaseChange(room *TeamRoom, conn *websocket.Conn, message TeamMessage, roomKey string) {
 	// Update room state
 	room.Mutex.Lock()
-	oldPhase := room.CurrentPhase
 	if message.Phase != "" {
 		room.CurrentPhase = message.Phase
 	} else {

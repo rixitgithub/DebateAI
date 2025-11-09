@@ -99,8 +99,7 @@ const ChatRoom = () => {
       setJoined(false);
     };
 
-    wsRef.current.onerror = (error: Event) => {
-    };
+    wsRef.current.onerror = () => {};
   };
 
   const sendMessage = () => {

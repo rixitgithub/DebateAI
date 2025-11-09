@@ -3,17 +3,19 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"arguehub/db"
 	"arguehub/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"strings"
 )
 
 var upgrader = websocket.Upgrader{
@@ -43,6 +45,8 @@ type Client struct {
 	IsMuted      bool   // New field to track mute status
 	Role         string // New field to track debate role (for/against)
 	SpeechText   string // New field to store speech text
+	IsSpectator  bool
+	ConnectionID string
 }
 
 // SafeWriteJSON safely writes JSON data to the client's WebSocket connection
@@ -101,11 +105,122 @@ func snapshotRecipients(room *Room, exclude *websocket.Conn) []*Client {
 	defer room.Mutex.Unlock()
 	out := make([]*Client, 0, len(room.Clients))
 	for cc, cl := range room.Clients {
-		if cc != exclude {
-			out = append(out, cl)
+		if cc == exclude {
+			continue
 		}
+		out = append(out, cl)
 	}
 	return out
+}
+
+func nonSpectatorRecipients(room *Room, exclude *websocket.Conn) []*Client {
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+	out := make([]*Client, 0, len(room.Clients))
+	for cc, cl := range room.Clients {
+		if (exclude != nil && cc == exclude) || cl.IsSpectator {
+			continue
+		}
+		out = append(out, cl)
+	}
+	return out
+}
+
+func countDebaters(room *Room) int {
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+	count := 0
+	for _, cl := range room.Clients {
+		if !cl.IsSpectator {
+			count++
+		}
+	}
+	return count
+}
+
+func countSpectators(room *Room) int {
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+	count := 0
+	for _, cl := range room.Clients {
+		if cl.IsSpectator {
+			count++
+		}
+	}
+	return count
+}
+
+func buildParticipantsMessage(room *Room) map[string]interface{} {
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	participants := make([]map[string]interface{}, 0, len(room.Clients))
+	spectatorCount := 0
+
+	for _, client := range room.Clients {
+		if client.IsSpectator {
+			spectatorCount++
+			continue
+		}
+
+		participants = append(participants, map[string]interface{}{
+			"id":          client.UserID,
+			"displayName": client.Username,
+			"email":       client.Email,
+			"role":        client.Role,
+			"isMuted":     client.IsMuted,
+		})
+	}
+
+	message := map[string]interface{}{
+		"type":             "roomParticipants",
+		"roomParticipants": participants,
+		"spectatorCount":   spectatorCount,
+	}
+
+	return message
+}
+
+func broadcastParticipants(room *Room) {
+	message := buildParticipantsMessage(room)
+	for _, client := range snapshotRecipients(room, nil) {
+		if err := client.SafeWriteJSON(message); err != nil {
+		}
+	}
+}
+
+func notifySpectatorStatus(room *Room, spectator *Client, joined bool) {
+	if spectator == nil {
+		return
+	}
+
+	messageType := "spectatorJoined"
+	if !joined {
+		messageType = "spectatorLeft"
+	}
+
+	status := map[string]interface{}{
+		"type": messageType,
+		"spectator": map[string]interface{}{
+			"connectionId":         spectator.ConnectionID,
+			"spectatorUserId":      spectator.UserID,
+			"spectatorDisplayName": spectator.Username,
+		},
+		"spectatorCount": countSpectators(room),
+	}
+
+	for _, client := range nonSpectatorRecipients(room, nil) {
+		if err := client.SafeWriteJSON(status); err != nil {
+		}
+	}
+}
+
+func broadcastRawToDebaters(room *Room, exclude *websocket.Conn, payload []byte) {
+	recipients := nonSpectatorRecipients(room, exclude)
+	for _, client := range recipients {
+		if err := client.SafeWriteMessage(websocket.TextMessage, payload); err != nil {
+		}
+	}
 }
 
 // WebsocketHandler handles WebSocket connections for debate signaling.
@@ -155,7 +270,6 @@ func WebsocketHandler(c *gin.Context) {
 	}
 	room := rooms[roomID]
 	room.Mutex.Lock()
-	currentClients := len(room.Clients)
 	room.Mutex.Unlock()
 	roomsMutex.Unlock()
 
@@ -167,20 +281,14 @@ func WebsocketHandler(c *gin.Context) {
 
 	// Check if this is a spectator connection (they want to receive video streams)
 	// Allow spectators to connect even if room has 2 debaters
-	isSpectator := c.Query("spectator") == "true"
-	room.Mutex.Lock()
-	currentClientCount := len(room.Clients)
-	// Limit debaters to 2, but allow unlimited spectators
-	maxDebaters := 2
-	if !isSpectator && currentClientCount >= maxDebaters {
-		room.Mutex.Unlock()
-		conn.Close()
-		return
+	isSpectator := strings.EqualFold(c.Query("spectator"), "true")
+	if !isSpectator {
+		if countDebaters(room) >= 2 {
+			log.Printf("[ws] rejecting debater %s for room %s: already full", email, roomID)
+			conn.Close()
+			return
+		}
 	}
-	if isSpectator {
-	} else {
-	}
-	room.Mutex.Unlock()
 
 	// Create client instance
 	client := &Client{
@@ -195,59 +303,52 @@ func WebsocketHandler(c *gin.Context) {
 		IsMuted:      false,
 		Role:         "",
 		SpeechText:   "",
+		IsSpectator:  isSpectator,
+	}
+
+	if isSpectator {
+		client.Role = "spectator"
+		client.ConnectionID = uuid.New().String()
 	}
 
 	// Mark as spectator if needed (we can add a field to Client struct for this)
 	// For now, we'll handle it through the message handlers
 
-	room.Clients[conn] = client
-
 	// Send current participants to the new client
 	room.Mutex.Lock()
-	participants := make([]map[string]interface{}, 0, len(room.Clients))
-	for _, c := range room.Clients {
-		participants = append(participants, map[string]interface{}{
-			"id":          c.UserID,
-			"displayName": c.Username,
-			"email":       c.Email,
-			"role":        c.Role,
-		})
-	}
+	room.Clients[conn] = client
 	room.Mutex.Unlock()
 
 	// Send participants list to newly connected client
-	participantsMsg := map[string]interface{}{
-		"type":             "roomParticipants",
-		"roomParticipants": participants,
-	}
+	participantsMsg := buildParticipantsMessage(room)
 	client.SafeWriteJSON(participantsMsg)
 
 	// Broadcast new participant to other clients
-	recipientCount := 0
 	for _, r := range snapshotRecipients(room, conn) {
 		r.SafeWriteJSON(participantsMsg)
-		recipientCount++
+	}
+
+	if client.IsSpectator {
+		log.Printf("[ws] spectator connected: room=%s connectionId=%s user=%s", roomID, client.ConnectionID, client.Email)
+		notifySpectatorStatus(room, client, true)
 	}
 
 	// Listen for messages.
 	for {
 		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				log.Printf("[ws] connection closed: room=%s spectator=%t user=%s", roomID, client.IsSpectator, client.Email)
+			} else {
+				log.Printf("[ws] read error: room=%s spectator=%t user=%s err=%v", roomID, client.IsSpectator, client.Email, err)
+			}
 			// Remove client from room.
 			room.Mutex.Lock()
-			delete(room.Clients, conn)
-			clientCount := len(room.Clients)
-
-			// Build updated participants list
-			participants := make([]map[string]interface{}, 0, clientCount)
-			for _, c := range room.Clients {
-				participants = append(participants, map[string]interface{}{
-					"id":          c.UserID,
-					"displayName": c.Username,
-					"email":       c.Email,
-					"role":        c.Role,
-				})
+			disconnectedClient, exists := room.Clients[conn]
+			if exists {
+				delete(room.Clients, conn)
 			}
+			clientCount := len(room.Clients)
 
 			// If room is empty, delete it.
 			if clientCount == 0 {
@@ -257,14 +358,14 @@ func WebsocketHandler(c *gin.Context) {
 			}
 			room.Mutex.Unlock()
 
+			if exists && disconnectedClient.IsSpectator {
+				log.Printf("[ws] spectator disconnected: room=%s connectionId=%s user=%s", roomID, disconnectedClient.ConnectionID, disconnectedClient.Email)
+				notifySpectatorStatus(room, disconnectedClient, false)
+			}
+
 			// Broadcast updated participants to remaining clients
 			if clientCount > 0 {
-				for _, c := range room.Clients {
-					c.SafeWriteJSON(map[string]interface{}{
-						"type":             "roomParticipants",
-						"roomParticipants": participants,
-					})
-				}
+				broadcastParticipants(room)
 			}
 			break
 		}
@@ -309,6 +410,28 @@ func WebsocketHandler(c *gin.Context) {
 		case "unmute":
 			handleUnmuteRequest(room, conn, message, client, roomID)
 		default:
+			if message.Type == "requestOffer" && client.IsSpectator {
+				var req map[string]interface{}
+				if err := json.Unmarshal(msg, &req); err == nil {
+					if client.ConnectionID == "" {
+						client.ConnectionID = uuid.New().String()
+					}
+					log.Printf("[ws] spectator requestOffer: room=%s connectionId=%s user=%s", roomID, client.ConnectionID, client.Email)
+					req["connectionId"] = client.ConnectionID
+					req["spectatorUserId"] = client.UserID
+					req["spectatorDisplayName"] = client.Username
+					if enriched, err := json.Marshal(req); err == nil {
+						broadcastRawToDebaters(room, conn, enriched)
+						if message.Type == "offer" && !client.IsSpectator {
+							var payload map[string]interface{}
+							if err := json.Unmarshal(msg, &payload); err == nil {
+								log.Printf("[ws] forwarding offer: room=%s from=%s connectionId=%v", roomID, client.Email, payload["connectionId"])
+							}
+						}
+						continue
+					}
+				}
+			}
 			// Broadcast the message to all other clients in the room (including spectators).
 			// This handles WebRTC offers, answers, candidates, etc.
 			recipientCount := 0
@@ -485,6 +608,10 @@ func handleRoleSelection(room *Room, conn *websocket.Conn, message Message, room
 	// Store the role in the client
 	room.Mutex.Lock()
 	if client, exists := room.Clients[conn]; exists {
+		if client.IsSpectator {
+			room.Mutex.Unlock()
+			return
+		}
 		client.Role = message.Role
 	}
 	room.Mutex.Unlock()
@@ -494,6 +621,9 @@ func handleRoleSelection(room *Room, conn *websocket.Conn, message Message, room
 		if err := r.SafeWriteJSON(message); err != nil {
 		}
 	}
+
+	// Send updated participant snapshot to everyone
+	broadcastParticipants(room)
 }
 
 // handleReadyStatus handles ready status

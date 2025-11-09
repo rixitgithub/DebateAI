@@ -6,8 +6,16 @@ export const wsAtom = atom<WebSocket | null>(null);
 // Debate ID atom
 export const debateIdAtom = atom<string | null>(null);
 
-// Poll state atom: { pollId: { optionA: 0, optionB: 0 } }
-export const pollStateAtom = atom<Record<string, Record<string, number>>>({});
+export interface PollInfo {
+  pollId: string;
+  question: string;
+  options: string[];
+  counts: Record<string, number>;
+  voters: number;
+}
+
+// Poll state atom: pollId -> poll info
+export const pollStateAtom = atom<Record<string, PollInfo>>({});
 
 // User spectator ID atom (generated once and stored)
 export const spectatorIdAtom = atom<string>(() => {
@@ -27,10 +35,14 @@ export const spectatorHashAtom = atom<string>(() => {
   const stored = localStorage.getItem('spectatorHash');
   if (stored) return stored;
   
-  // Generate hash from spectator ID
-  const spectatorId = localStorage.getItem('spectatorId') || crypto.randomUUID();
-  // Note: Hash will be computed server-side, but we store ID for client-side use
-  return '';
+  const spectatorId =
+    localStorage.getItem('spectatorId') || crypto.randomUUID();
+  if (!localStorage.getItem('spectatorId')) {
+    localStorage.setItem('spectatorId', spectatorId);
+  }
+
+  // Hash is computed server-side; return the ID as a placeholder.
+  return spectatorId;
 });
 
 // Transcript atom (full transcript text)

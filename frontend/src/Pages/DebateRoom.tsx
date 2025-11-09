@@ -279,10 +279,7 @@ const DebateRoom: React.FC = () => {
         };
 
         recognitionRef.current.onend = () => setIsRecognizing(false);
-        recognitionRef.current.onerror = (event: Event) => {
-            "Speech recognition error:",
-            (event as ErrorEvent).error || event
-          );
+        recognitionRef.current.onerror = () => {
           setIsRecognizing(false);
         };
       }
