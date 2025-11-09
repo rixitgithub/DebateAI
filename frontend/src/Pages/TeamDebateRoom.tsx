@@ -173,6 +173,9 @@ const TeamDebateRoom: React.FC = () => {
   const remoteVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
   const debateStartedRef = useRef<boolean>(false); // Track if debate has started to prevent popup reopening
+  const isTeam1Ref = useRef<boolean>(isTeam1);
+  const debatePhaseRef = useRef<DebatePhase>(debatePhase);
+  const currentUserIdRef = useRef<string | undefined>(currentUser?.id);
 
   // State for media streams
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -339,8 +342,40 @@ const TeamDebateRoom: React.FC = () => {
     };
   }, [timer, debatePhase, isMyTurn, speechTranscripts, localRole, debateId]);
 
+  useEffect(() => {
+    isTeam1Ref.current = isTeam1;
+  }, [isTeam1]);
+
+  useEffect(() => {
+    debatePhaseRef.current = debatePhase;
+  }, [debatePhase]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id;
+  }, [currentUser?.id]);
+
   // Initialize WebSocket connection - only need token and debateId
   // User ID will be extracted from token on backend
+  const getMedia = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720 },
+        audio: true,
+      });
+      localStreamRef.current = stream;
+
+      const currentUserId = currentUserIdRef.current || "";
+      const localVideo = localVideoRefs.current.get(currentUserId);
+      if (localVideo) {
+        localVideo.srcObject = stream;
+      }
+    } catch (err) {
+      setMediaError(
+        "Failed to access camera/microphone. Please check permissions."
+      );
+    }
+  }, [setMediaError]);
+
   useEffect(() => {
     const token = getAuthToken();
     if (!token || !debateId) {
@@ -359,6 +394,9 @@ const TeamDebateRoom: React.FC = () => {
 
     ws.onmessage = async (event) => {
       const data: WSMessage = JSON.parse(event.data);
+      const isTeam1Latest = isTeam1Ref.current;
+      const currentUserIdLatest = currentUserIdRef.current;
+      const currentPhaseLatest = debatePhaseRef.current;
 
       switch (data.type) {
         case "stateSync":
@@ -380,7 +418,7 @@ const TeamDebateRoom: React.FC = () => {
           // Set roles based on which team the user is on
           // If user is Team1, their role is team1Role, opponent role is team2Role
           // If user is Team2, their role is team2Role, opponent role is team1Role
-          if (isTeam1) {
+          if (isTeam1Latest) {
             if (data.team1Role) {
               setLocalRole(data.team1Role as DebateRole);
             }
@@ -402,14 +440,14 @@ const TeamDebateRoom: React.FC = () => {
           
           // Update team names if provided (for late joiners)
           if ((data as any).team1Name) {
-            if (isTeam1) {
+            if (isTeam1Latest) {
               setMyTeamName((data as any).team1Name);
             } else {
               setOpponentTeamName((data as any).team1Name);
             }
           }
           if ((data as any).team2Name) {
-            if (isTeam1) {
+            if (isTeam1Latest) {
               setOpponentTeamName((data as any).team2Name);
             } else {
               setMyTeamName((data as any).team2Name);
@@ -440,34 +478,34 @@ const TeamDebateRoom: React.FC = () => {
           
           // Check if opponent team members are all ready (but don't override localReady)
           // localReady should only be set when the user clicks the ready button
-          const opponentReadyRaw = isTeam1 ? data.team2Ready : data.team1Ready;
+          const opponentReadyRaw = isTeam1Latest ? data.team2Ready : data.team1Ready;
           const opponentCount =
-            (isTeam1 ? data.team2MembersCount : data.team1MembersCount) ?? 0;
+            (isTeam1Latest ? data.team2MembersCount : data.team1MembersCount) ?? 0;
           const opponentReady = opponentReadyRaw ?? 0;
           setPeerReady(opponentCount > 0 && opponentReady === opponentCount);
           
           // Update localReady if we have the user's ready status in stateSync
-          if (currentUser?.id) {
+          if (currentUserIdLatest) {
             const team1Status = (data as any).team1ReadyStatus as Record<string, boolean> | undefined;
             const team2Status = (data as any).team2ReadyStatus as Record<string, boolean> | undefined;
-            if (isTeam1 && team1Status && team1Status[currentUser.id] !== undefined) {
-              setLocalReady(team1Status[currentUser.id]);
-            } else if (!isTeam1 && team2Status && team2Status[currentUser.id] !== undefined) {
-              setLocalReady(team2Status[currentUser.id]);
+            if (isTeam1Latest && team1Status && team1Status[currentUserIdLatest] !== undefined) {
+              setLocalReady(team1Status[currentUserIdLatest]);
+            } else if (!isTeam1Latest && team2Status && team2Status[currentUserIdLatest] !== undefined) {
+              setLocalReady(team2Status[currentUserIdLatest]);
             }
           }
           
           break;
         case "teamMembers":
           if (data.team1Members) {
-            if (isTeam1) {
+            if (isTeam1Latest) {
               setMyTeamMembers(data.team1Members);
             } else {
               setOpponentTeamMembers(data.team1Members);
             }
           }
           if (data.team2Members) {
-            if (isTeam1) {
+            if (isTeam1Latest) {
               setOpponentTeamMembers(data.team2Members);
             } else {
               setMyTeamMembers(data.team2Members);
@@ -520,19 +558,10 @@ const TeamDebateRoom: React.FC = () => {
           break;
         case "ready":
           
-          // CRITICAL: Verify the ready status is assigned to the correct team
-          const messageTeamId = data.teamId;
-          const expectedTeamId = myTeamId; // Should be the same regardless of isTeam1
-          const assignedTeam = (data as any).assignedToTeam;
-          
           // Update the ready status for the specific user who clicked
-          if (data.userId === currentUser?.id && data.ready !== undefined) {
+          if (data.userId && currentUserIdLatest && data.userId === currentUserIdLatest && data.ready !== undefined) {
             // Verify team assignment matches
-            if (assignedTeam && assignedTeam !== (isTeam1 ? "Team1" : "Team2")) {
-            } else if (messageTeamId && expectedTeamId && messageTeamId !== expectedTeamId) {
-            } else {
               setLocalReady(data.ready);
-            }
           }
           
           // Update individual player ready status
@@ -565,10 +594,10 @@ const TeamDebateRoom: React.FC = () => {
           // CRITICAL: Each user should see their own team correctly
           // Use (data as any) to access fields that might not be in TypeScript interface
           const dataAny = data as any;
-          const oppReadyCount = isTeam1
+          const oppReadyCount = isTeam1Latest
             ? (data.team2Ready ?? dataAny.team2Ready)
             : (data.team1Ready ?? dataAny.team1Ready);
-          const oppTeamTotal = isTeam1
+          const oppTeamTotal = isTeam1Latest
             ? (data.team2MembersCount ?? dataAny.team2MembersCount)
             : (data.team1MembersCount ?? dataAny.team1MembersCount);
           const allOppReady = oppTeamTotal > 0 && oppReadyCount === oppTeamTotal;
@@ -593,7 +622,7 @@ const TeamDebateRoom: React.FC = () => {
           break;
         case "speechText":
           if (data.userId && data.speechText) {
-            const targetPhase = data.phase || debatePhase;
+            const targetPhase = data.phase || currentPhaseLatest;
             setSpeechTranscripts((prev) => ({
             ...prev,
               [targetPhase]:
@@ -633,26 +662,6 @@ const TeamDebateRoom: React.FC = () => {
     };
 
 
-    const getMedia = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
-          audio: true,
-        });
-        localStreamRef.current = stream;
-        
-        // Attach local stream to video element
-        const localVideo = localVideoRefs.current.get(currentUser?.id || "");
-        if (localVideo) {
-          localVideo.srcObject = stream;
-        }
-      } catch (err) {
-        setMediaError(
-          "Failed to access camera/microphone. Please check permissions."
-        );
-      }
-    };
-
     return () => {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -662,7 +671,7 @@ const TeamDebateRoom: React.FC = () => {
       }
       pcRefs.current.forEach((pc) => pc.close());
     };
-  }, [debateId, isTeam1, debatePhase, currentUser?.id, debate]); // Include currentUser?.id and debate in dependencies
+  }, [debateId, getMedia]);
 
   // Initialize Speech Recognition
   useEffect(() => {

@@ -398,7 +398,8 @@ func handleTeamJoin(room *TeamRoom, conn *websocket.Conn, message TeamMessage, c
 	teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
 
 	// Broadcast to all clients in the room
-	for _, r := range room.Clients {
+	recipients := snapshotTeamRecipients(room, nil)
+	for _, r := range recipients {
 		response := map[string]interface{}{
 			"type":        "teamStatus",
 			"teamStatus":  teamStatus,
@@ -536,7 +537,8 @@ func handleTeamPhaseChange(room *TeamRoom, conn *websocket.Conn, message TeamMes
 		Type:  "phaseChange",
 		Phase: room.CurrentPhase,
 	}
-	for _, r := range room.Clients {
+	recipients := snapshotTeamRecipients(room, nil)
+	for _, r := range recipients {
 		if err := r.SafeWriteJSON(phaseMessage); err != nil {
 		} else {
 		}
@@ -553,7 +555,8 @@ func handleTeamTopicChange(room *TeamRoom, conn *websocket.Conn, message TeamMes
 	room.Mutex.Unlock()
 
 	// Broadcast topic change to ALL clients (including sender for sync)
-	for _, r := range room.Clients {
+	recipients := snapshotTeamRecipients(room, nil)
+	for _, r := range recipients {
 		if err := r.SafeWriteJSON(message); err != nil {
 		}
 	}
@@ -588,7 +591,8 @@ func handleTeamRoleSelection(room *TeamRoom, conn *websocket.Conn, message TeamM
 		}
 		room.Mutex.Unlock()
 
-		for _, r := range room.Clients {
+		recipients := snapshotTeamRecipients(room, nil)
+		for _, r := range recipients {
 			if err := r.SafeWriteJSON(roleMessage); err != nil {
 			}
 		}
@@ -774,7 +778,8 @@ func handleTeamTurnRequest(room *TeamRoom, conn *websocket.Conn, message TeamMes
 
 		// Broadcast turn status to all clients
 		teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
-		for _, r := range room.Clients {
+		recipients := snapshotTeamRecipients(room, nil)
+		for _, r := range recipients {
 			if r.TeamID == client.TeamID {
 				response := map[string]interface{}{
 					"type":        "teamStatus",
@@ -806,7 +811,8 @@ func handleTeamTurnEnd(room *TeamRoom, conn *websocket.Conn, message TeamMessage
 	teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
 
 	// Broadcast turn change to all clients in the team
-	for _, r := range room.Clients {
+	recipients := snapshotTeamRecipients(room, nil)
+	for _, r := range recipients {
 		if r.TeamID == client.TeamID {
 			response := map[string]interface{}{
 				"type":        "teamStatus",

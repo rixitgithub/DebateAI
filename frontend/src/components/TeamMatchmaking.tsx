@@ -110,7 +110,7 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
         try {
           const status = await getMatchmakingStatus(team.id);
           if (status.matched) {
-            setMatchedTeam(status.team);
+            setMatchedTeam(status.team ?? null);
           }
         } catch (error) {
         }

@@ -607,14 +607,13 @@ func handleTopicChange(room *Room, conn *websocket.Conn, message Message, roomID
 func handleRoleSelection(room *Room, conn *websocket.Conn, message Message, roomID string) {
 	// Store the role in the client
 	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
 	if client, exists := room.Clients[conn]; exists {
 		if client.IsSpectator {
-			room.Mutex.Unlock()
 			return
 		}
 		client.Role = message.Role
 	}
-	room.Mutex.Unlock()
 
 	// Broadcast role selection to other clients
 	for _, r := range snapshotRecipients(room, conn) {

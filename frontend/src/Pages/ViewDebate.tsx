@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useAtom } from 'jotai';
-import { useDebateWS } from '../hooks/useDebateWS';
-import { ReactionBar } from '../components/ReactionBar';
-import { AnonymousQA } from '../components/AnonymousQA';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAtom } from "jotai";
+import { useDebateWS } from "../hooks/useDebateWS";
+import { ReactionBar } from "../components/ReactionBar";
+import { AnonymousQA } from "../components/AnonymousQA";
 import {
   debateIdAtom,
   pollStateAtom,
@@ -11,9 +11,16 @@ import {
   reactionsAtom,
   wsStatusAtom,
   presenceAtom,
-} from '../atoms/debateAtoms';
-import { Button } from '../components/ui/button';
-import { getAuthToken } from '../utils/auth';
+} from "../atoms/debateAtoms";
+import { Button } from "../components/ui/button";
+import { getAuthToken } from "../utils/auth";
+
+type DebateParticipant = {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  role?: string;
+};
 
 export const ViewDebate: React.FC = () => {
   const { debateID } = useParams<{ debateID: string }>();
@@ -33,11 +40,11 @@ export const ViewDebate: React.FC = () => {
   const [remoteStream2, setRemoteStream2] = useState<MediaStream | null>(null);
   const remoteStream1Ref = useRef<MediaStream | null>(null);
   const remoteStream2Ref = useRef<MediaStream | null>(null);
-  const [participants, setParticipants] = useState<Array<{ id: string; displayName: string; avatarUrl?: string; role?: string }>>([]);
-  const participantsRef = useRef<Array<{ id: string; displayName: string; avatarUrl?: string; role?: string }>>([]);
+  const [participants, setParticipants] = useState<DebateParticipant[]>([]);
+  const participantsRef = useRef<DebateParticipant[]>([]);
   const [spectatorCount, setSpectatorCount] = useState<number>(0);
-  const [pollQuestion, setPollQuestion] = useState<string>('');
-  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollQuestion, setPollQuestion] = useState<string>("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [isCreatingPoll, setIsCreatingPoll] = useState<boolean>(false);
   const [pollError, setPollError] = useState<string | null>(null);
   const roomWsRef = useRef<WebSocket | null>(null);
@@ -53,9 +60,9 @@ export const ViewDebate: React.FC = () => {
   >(new Map());
   const userToConnectionRef = useRef<Map<string, string>>(new Map());
   const baseConnectionToIdsRef = useRef<Map<string, Set<string>>>(new Map());
-  const pendingCandidatesRef = useRef<
-    Map<string, RTCIceCandidateInit[]>
-  >(new Map());
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(
+    new Map()
+  );
   const offerRequestedRef = useRef(false);
 
   useEffect(() => {
@@ -73,13 +80,15 @@ export const ViewDebate: React.FC = () => {
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') || 'localhost:1313';
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host =
+      import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, "") ||
+      "localhost:1313";
     const wsUrl = `${protocol}//${host}/ws?room=${debateID}&token=${token}&spectator=true`;
     const ws = new WebSocket(wsUrl);
     roomWsRef.current = ws;
 
-    const requestOffersIfNeeded = (reason: string) => {
+    const requestOffersIfNeeded = () => {
       if (ws.readyState !== WebSocket.OPEN) {
         return;
       }
@@ -103,7 +112,7 @@ export const ViewDebate: React.FC = () => {
       const requestId = `spectator_${Date.now()}_${Math.random()
         .toString(36)
         .substr(2, 9)}`;
-      ws.send(JSON.stringify({ type: 'requestOffer', requestId }));
+      ws.send(JSON.stringify({ type: "requestOffer", requestId }));
       offerRequestedRef.current = true;
     };
 
@@ -151,7 +160,7 @@ export const ViewDebate: React.FC = () => {
 
       if (!options?.skipReoffer) {
         offerRequestedRef.current = false;
-        requestOffersIfNeeded('peerConnectionCleanup');
+        requestOffersIfNeeded();
       }
     };
 
@@ -160,17 +169,15 @@ export const ViewDebate: React.FC = () => {
       userId: string
     ): RTCPeerConnection => {
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
       });
-      const baseConnectionId = connectionId.includes(':')
-        ? connectionId.split(':')[0]
+      const baseConnectionId = connectionId.includes(":")
+        ? connectionId.split(":")[0]
         : connectionId;
 
       pc.ontrack = (event) => {
         if (!event.streams[0]) return;
-        const slot = participantsRef.current.findIndex(
-          (p) => p.id === userId
-        );
+        const slot = participantsRef.current.findIndex((p) => p.id === userId);
 
         if (slot === 0 || slot === -1) {
           setRemoteStream1(event.streams[0]);
@@ -192,7 +199,7 @@ export const ViewDebate: React.FC = () => {
         if (event.candidate && ws.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
-              type: 'candidate',
+              type: "candidate",
               candidate: event.candidate,
               userId,
               connectionId,
@@ -204,9 +211,9 @@ export const ViewDebate: React.FC = () => {
       const handleConnectionStateChange = () => {
         const state = pc.connectionState || pc.iceConnectionState;
         if (
-          state === 'failed' ||
-          state === 'disconnected' ||
-          state === 'closed'
+          state === "failed" ||
+          state === "disconnected" ||
+          state === "closed"
         ) {
           cleanupPeerConnection(connectionId);
         }
@@ -254,28 +261,28 @@ export const ViewDebate: React.FC = () => {
     };
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join', room: debateID }));
+      ws.send(JSON.stringify({ type: "join", room: debateID }));
     };
 
     ws.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
 
-        if (data.type === 'roomParticipants' && data.roomParticipants) {
-          const debatersOnly = data.roomParticipants.filter(
-            (p: any) => p.role && (p.role === 'for' || p.role === 'against')
+        if (data.type === "roomParticipants" && data.roomParticipants) {
+          const roomParticipants =
+            (data.roomParticipants as DebateParticipant[]) ?? [];
+          const debatersOnly = roomParticipants.filter(
+            (p) => p.role === "for" || p.role === "against"
           );
           setParticipants(debatersOnly);
           participantsRef.current = debatersOnly;
-          if (typeof data.spectatorCount === 'number') {
+          if (typeof data.spectatorCount === "number") {
             setSpectatorCount(data.spectatorCount);
           }
 
           offerRequestedRef.current = false;
 
-          const activeDebaterIds = new Set(
-            debatersOnly.map((p: any) => p.id)
-          );
+          const activeDebaterIds = new Set(debatersOnly.map((p) => p.id));
           const connectionsToRemove: string[] = [];
           peerConnectionsRef.current.forEach((entry, connectionId) => {
             if (!activeDebaterIds.has(entry.userId)) {
@@ -296,15 +303,12 @@ export const ViewDebate: React.FC = () => {
             setRemoteStream2(null);
           }
 
-          requestOffersIfNeeded('participantsUpdate');
-        } else if (data.type === 'offer' && data.userId && data.offer) {
+          requestOffersIfNeeded();
+        } else if (data.type === "offer" && data.userId && data.offer) {
           const connectionId =
             data.connectionId ||
             userToConnectionRef.current.get(data.userId) ||
             `${data.userId}`;
-          const debaterIndex = participantsRef.current.findIndex(
-            (p: any) => p.id === data.userId
-          );
           if (connectionId && data.offer) {
             try {
               const pc = getPeerConnection(connectionId, data.userId);
@@ -318,11 +322,11 @@ export const ViewDebate: React.FC = () => {
               await pc.setLocalDescription(answer);
               ws.send(
                 JSON.stringify({
-                  type: 'answer',
+                  type: "answer",
                   answer,
                   targetUserId: data.userId,
                   userId: data.userId,
-                  connectionId: data.connectionId,
+                  connectionId,
                 })
               );
               const queuedCandidates =
@@ -330,21 +334,24 @@ export const ViewDebate: React.FC = () => {
               if (queuedCandidates && queuedCandidates.length > 0) {
                 for (const candidate of queuedCandidates) {
                   try {
-                    await pc.addIceCandidate(
-                      new RTCIceCandidate(candidate)
-                    );
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
                   } catch (candidateError) {
+                    console.error(
+                      "Failed to flush pending ICE candidate",
+                      candidateError
+                    );
                   }
                 }
                 pendingCandidatesRef.current.delete(connectionId);
               }
-            } catch (error) {
+            } catch (offerError) {
+              console.error("Error handling incoming offer", offerError);
             }
           }
-        } else if (data.type === 'candidate' && data.candidate) {
+        } else if (data.type === "candidate" && data.candidate) {
           const connectionId =
             data.connectionId ||
-            userToConnectionRef.current.get(data.userId ?? '') ||
+            userToConnectionRef.current.get(data.userId ?? "") ||
             null;
 
           if (!connectionId) {
@@ -357,20 +364,20 @@ export const ViewDebate: React.FC = () => {
               await entry.pc.addIceCandidate(
                 new RTCIceCandidate(data.candidate)
               );
-            } catch (error) {
+            } catch {
               const queue =
                 pendingCandidatesRef.current.get(connectionId) ?? [];
               queue.push(data.candidate);
               pendingCandidatesRef.current.set(connectionId, queue);
             }
           } else {
-            const queue =
-              pendingCandidatesRef.current.get(connectionId) ?? [];
+            const queue = pendingCandidatesRef.current.get(connectionId) ?? [];
             queue.push(data.candidate);
             pendingCandidatesRef.current.set(connectionId, queue);
           }
         }
-      } catch (error) {
+      } catch (messageError) {
+        console.error("Error handling debate room message", messageError);
       }
     };
 
@@ -416,11 +423,11 @@ export const ViewDebate: React.FC = () => {
       timestamp: Date.now(),
     };
 
-    sendMessage('vote', payload);
+    sendMessage("vote", payload);
   };
 
   const handleAddPollOption = () => {
-    setPollOptions((prev) => [...prev, '']);
+    setPollOptions((prev) => [...prev, ""]);
   };
 
   const handlePollOptionChange = (index: number, value: string) => {
@@ -448,24 +455,24 @@ export const ViewDebate: React.FC = () => {
       .filter((opt) => opt.length > 0);
 
     if (!question) {
-      setPollError('Please enter a poll question.');
+      setPollError("Please enter a poll question.");
       return;
     }
 
     if (options.length < 2) {
-      setPollError('Please provide at least two options.');
+      setPollError("Please provide at least two options.");
       return;
     }
 
     setPollError(null);
     setIsCreatingPoll(true);
     try {
-      sendMessage('createPoll', {
+      sendMessage("createPoll", {
         question,
         options,
       });
-      setPollQuestion('');
-      setPollOptions(['', '']);
+      setPollQuestion("");
+      setPollOptions(["", ""]);
     } finally {
       setIsCreatingPoll(false);
     }
@@ -491,10 +498,13 @@ export const ViewDebate: React.FC = () => {
             <p className="text-xs uppercase tracking-widest text-muted-foreground">
               Live debate
             </p>
-            <h1 className="text-2xl font-semibold">Debate #{debateID.slice(0, 8)}</h1>
+            <h1 className="text-2xl font-semibold">
+              Debate #{debateID.slice(0, 8)}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              {wsStatus === 'connected' ? 'Connected' : 'Connecting…'} • {presence}{' '}
-              spectator{presence === 1 ? '' : 's'} watching • room viewers {spectatorCount}
+              {wsStatus === "connected" ? "Connected" : "Connecting…"} •{" "}
+              {presence} spectator{presence === 1 ? "" : "s"} watching • room
+              viewers {spectatorCount}
             </p>
           </div>
           <Button variant="ghost" onClick={() => navigate(-1)}>
@@ -515,14 +525,14 @@ export const ViewDebate: React.FC = () => {
                 />
                 {!remoteStream1 && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
-                    <span>{participants[0]?.displayName || 'Debater 1'}</span>
+                    <span>{participants[0]?.displayName || "Debater 1"}</span>
                     <span className="text-xs">Waiting for video…</span>
                   </div>
                 )}
                 {participants[0] && (
                   <div className="absolute bottom-3 left-3 rounded-full bg-background/80 px-3 py-1 text-xs font-medium">
                     {participants[0].displayName}
-                    {participants[0].role ? ` • ${participants[0].role}` : ''}
+                    {participants[0].role ? ` • ${participants[0].role}` : ""}
                   </div>
                 )}
               </div>
@@ -537,14 +547,14 @@ export const ViewDebate: React.FC = () => {
                 />
                 {!remoteStream2 && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
-                    <span>{participants[1]?.displayName || 'Debater 2'}</span>
+                    <span>{participants[1]?.displayName || "Debater 2"}</span>
                     <span className="text-xs">Waiting for video…</span>
                   </div>
                 )}
                 {participants[1] && (
                   <div className="absolute bottom-3 left-3 rounded-full bg-background/80 px-3 py-1 text-xs font-medium">
                     {participants[1].displayName}
-                    {participants[1].role ? ` • ${participants[1].role}` : ''}
+                    {participants[1].role ? ` • ${participants[1].role}` : ""}
                   </div>
                 )}
               </div>
@@ -574,7 +584,9 @@ export const ViewDebate: React.FC = () => {
                       <input
                         type="text"
                         value={option}
-                        onChange={(e) => handlePollOptionChange(index, e.target.value)}
+                        onChange={(e) =>
+                          handlePollOptionChange(index, e.target.value)
+                        }
                         placeholder={`Option ${index + 1}`}
                         className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
                       />
@@ -600,8 +612,12 @@ export const ViewDebate: React.FC = () => {
                 {pollError && (
                   <p className="text-xs text-destructive">{pollError}</p>
                 )}
-                <Button type="submit" disabled={isCreatingPoll} className="w-full">
-                  {isCreatingPoll ? 'Creating…' : 'Publish poll'}
+                <Button
+                  type="submit"
+                  disabled={isCreatingPoll}
+                  className="w-full"
+                >
+                  {isCreatingPoll ? "Creating…" : "Publish poll"}
                 </Button>
               </form>
 
@@ -622,9 +638,11 @@ export const ViewDebate: React.FC = () => {
                         className="rounded-xl border border-border/60 bg-background/60 p-4"
                       >
                         <div className="flex items-center justify-between text-sm font-medium">
-                          <span>{poll.question || `Poll ${poll.pollId.slice(0, 8)}`}</span>
+                          <span>
+                            {poll.question || `Poll ${poll.pollId.slice(0, 8)}`}
+                          </span>
                           <span className="text-xs text-muted-foreground">
-                            {totalVotes} vote{totalVotes === 1 ? '' : 's'}
+                            {totalVotes} vote{totalVotes === 1 ? "" : "s"}
                           </span>
                         </div>
                         <div className="mt-3 space-y-2">
@@ -665,7 +683,9 @@ export const ViewDebate: React.FC = () => {
               </h2>
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                 {reactions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No reactions yet.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No reactions yet.
+                  </p>
                 ) : (
                   reactions
                     .slice()
@@ -695,11 +715,11 @@ export const ViewDebate: React.FC = () => {
                   <dt className="text-muted-foreground">Connection</dt>
                   <dd
                     className={
-                      wsStatus === 'connected'
-                        ? 'font-medium text-emerald-500'
-                        : wsStatus === 'connecting'
-                        ? 'font-medium text-amber-500'
-                        : 'font-medium text-destructive'
+                      wsStatus === "connected"
+                        ? "font-medium text-emerald-500"
+                        : wsStatus === "connecting"
+                        ? "font-medium text-amber-500"
+                        : "font-medium text-destructive"
                     }
                   >
                     {wsStatus}
@@ -725,4 +745,3 @@ export const ViewDebate: React.FC = () => {
 };
 
 export default ViewDebate;
-

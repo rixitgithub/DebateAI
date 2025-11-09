@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "../components/ui/button";
 
@@ -158,7 +164,7 @@ const OnlineDebateRoom: React.FC = () => {
   const isRoomOwner = Boolean(roomOwnerId && currentUserId === roomOwnerId);
 
   // Refs for WebSocket, PeerConnection, and media elements
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef = useRef<ReconnectingWebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const spectatorPCsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const spectatorOfferQueueRef = useRef<
@@ -246,7 +252,10 @@ const OnlineDebateRoom: React.FC = () => {
     (baseConnectionId: string) => {
       const connectionIdsToCleanup: string[] = [];
       spectatorPCsRef.current.forEach((_, key) => {
-        if (key === baseConnectionId || key.startsWith(`${baseConnectionId}:`)) {
+        if (
+          key === baseConnectionId ||
+          key.startsWith(`${baseConnectionId}:`)
+        ) {
           connectionIdsToCleanup.push(key);
         }
       });
@@ -441,7 +450,9 @@ const OnlineDebateRoom: React.FC = () => {
   }>({ show: false, message: "" });
   const [judgmentData, setJudgmentData] = useState<JudgmentData | null>(null);
   const [showJudgment, setShowJudgment] = useState(false);
-  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(null);
+  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(
+    null
+  );
 
   // Ordered list of debate phases
   const phaseOrder: DebatePhase[] = [
@@ -673,20 +684,17 @@ const OnlineDebateRoom: React.FC = () => {
               DebatePhase.ClosingAgainst,
             ];
 
-      return rolePhases.reduce(
-        (acc, phase) => {
-          const storageKey = `${roomId}_${phase}_${role}`;
-          const stored = storageKey ? localStorage.getItem(storageKey) : null;
-          const fromState = speechTranscripts[phase] ?? "";
-          const combined =
-            (typeof fromState === "string" && fromState.trim().length > 0
-              ? fromState
-              : stored || "") || "";
-          acc[phase] = combined.trim().length > 0 ? combined : "No response";
-          return acc;
-        },
-        {} as { [key in DebatePhase]?: string }
-      );
+      return rolePhases.reduce((acc, phase) => {
+        const storageKey = `${roomId}_${phase}_${role}`;
+        const stored = storageKey ? localStorage.getItem(storageKey) : null;
+        const fromState = speechTranscripts[phase] ?? "";
+        const combined =
+          (typeof fromState === "string" && fromState.trim().length > 0
+            ? fromState
+            : stored || "") || "";
+        acc[phase] = combined.trim().length > 0 ? combined : "No response";
+        return acc;
+      }, {} as { [key in DebatePhase]?: string });
     };
 
     const ownerTranscripts = gatherTranscriptsForRole(localRole);
@@ -695,7 +703,9 @@ const OnlineDebateRoom: React.FC = () => {
 
     const opponentDetails =
       opponentUser ||
-      roomParticipants.find((participant) => participant.id !== currentUser?.id) ||
+      roomParticipants.find(
+        (participant) => participant.id !== currentUser?.id
+      ) ||
       null;
 
     const opponentId = opponentDetails?.id ?? null;
@@ -811,8 +821,7 @@ const OnlineDebateRoom: React.FC = () => {
         }
         return true;
       }
-    } catch (error) {
-    }
+    } catch (error) {}
     return false;
   };
 
@@ -849,7 +858,8 @@ const OnlineDebateRoom: React.FC = () => {
           if (ownerIdFromServer) {
             return ownerIdFromServer;
           }
-          const fallbackOwner = participants.length > 0 ? participants[0].id : null;
+          const fallbackOwner =
+            participants.length > 0 ? participants[0].id : null;
           if (!fallbackOwner) {
             return prev;
           }
@@ -858,7 +868,6 @@ const OnlineDebateRoom: React.FC = () => {
 
         // Set local and opponent user details
         if (currentUser && participants.length >= 1) {
-
           const localParticipant = participants.find(
             (p: UserDetails) =>
               p.id === currentUser.id || p.email === currentUser.email
@@ -868,7 +877,6 @@ const OnlineDebateRoom: React.FC = () => {
               (p.id !== currentUser.id || !p.id) &&
               p.email !== currentUser.email
           );
-
 
           if (localParticipant) {
             const localUserData = {
@@ -931,7 +939,6 @@ const OnlineDebateRoom: React.FC = () => {
       } else {
         // If room not found (404), it might still be being created
         if (response.status === 404 && retryCount < 5) {
-
           // Try to create the room if it's the first retry
           if (retryCount === 0) {
             await createRoomIfNeeded();
@@ -1096,16 +1103,15 @@ const OnlineDebateRoom: React.FC = () => {
             setRoomParticipants(data.roomParticipants);
             // Update local and opponent user details when participants change
             if (currentUser && data.roomParticipants.length >= 1) {
-          const localParticipant = data.roomParticipants.find(
-            (p: UserDetails) =>
-              p.id === currentUser.id || p.email === currentUser.email
-          );
-          const opponentParticipant = data.roomParticipants.find(
-            (p: UserDetails) =>
-              (p.id && p.id !== currentUser.id) ||
-              (!p.id && p.email && p.email !== currentUser.email)
-          );
-
+              const localParticipant = data.roomParticipants.find(
+                (p: UserDetails) =>
+                  p.id === currentUser.id || p.email === currentUser.email
+              );
+              const opponentParticipant = data.roomParticipants.find(
+                (p: UserDetails) =>
+                  (p.id && p.id !== currentUser.id) ||
+                  (!p.id && p.email && p.email !== currentUser.email)
+              );
 
               if (localParticipant) {
                 setLocalUser({
@@ -1177,17 +1183,19 @@ const OnlineDebateRoom: React.FC = () => {
             if (spectatorPc && data.answer) {
               try {
                 await spectatorPc.setRemoteDescription(data.answer);
-            const pending =
-              spectatorPendingCandidatesRef.current.get(data.connectionId);
-            if (pending && pending.length > 0) {
-              for (const candidate of pending) {
-                try {
-                  await spectatorPc.addIceCandidate(candidate);
-                } catch (err) {
+                const pending = spectatorPendingCandidatesRef.current.get(
+                  data.connectionId
+                );
+                if (pending && pending.length > 0) {
+                  for (const candidate of pending) {
+                    try {
+                      await spectatorPc.addIceCandidate(candidate);
+                    } catch (err) {}
+                  }
+                  spectatorPendingCandidatesRef.current.delete(
+                    data.connectionId
+                  );
                 }
-              }
-              spectatorPendingCandidatesRef.current.delete(data.connectionId);
-            }
               } catch {
                 cleanupSpectatorConnection(data.connectionId);
               }
@@ -1238,7 +1246,6 @@ const OnlineDebateRoom: React.FC = () => {
           break;
       }
     };
-
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -1305,13 +1312,11 @@ const OnlineDebateRoom: React.FC = () => {
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
-      localVideoRef.current
-        .play()
+      localVideoRef.current.play();
     }
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
-      remoteVideoRef.current
-        .play()
+      remoteVideoRef.current.play();
     }
   }, [localStream, remoteStream]);
 
@@ -1522,8 +1527,7 @@ const OnlineDebateRoom: React.FC = () => {
               if (recognitionRef.current) {
                 try {
                   recognitionRef.current.start();
-                } catch (error) {
-                }
+                } catch (error) {}
               }
             }, 100);
           }
@@ -1554,8 +1558,7 @@ const OnlineDebateRoom: React.FC = () => {
                   ) {
                     try {
                       recognitionRef.current.start();
-                    } catch (error) {
-                    }
+                    } catch (error) {}
                   }
                 }, 2000); // Wait 2 seconds before retrying
               } else {
@@ -1593,8 +1596,7 @@ const OnlineDebateRoom: React.FC = () => {
                   ) {
                     try {
                       recognitionRef.current.start();
-                    } catch (error) {
-                    }
+                    } catch (error) {}
                   }
                 }, 3000); // Wait 3 seconds before retrying
               } else {
@@ -1653,8 +1655,7 @@ const OnlineDebateRoom: React.FC = () => {
         if (animationRef.current) {
           cancelAnimationFrame(animationRef.current);
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     }
   }, [mediaRecorder]);
 
@@ -1801,8 +1802,7 @@ const OnlineDebateRoom: React.FC = () => {
           audio: true,
         });
         stream.getTracks().forEach((track) => track.stop());
-      } catch (error) {
-      }
+      } catch (error) {}
     };
     checkPermission();
   }, []);
@@ -1897,7 +1897,7 @@ const OnlineDebateRoom: React.FC = () => {
           )
           .then((offer) =>
             wsRef.current?.send(JSON.stringify({ type: "offer", offer }))
-          )
+          );
       }
     }
   }, [countdown, localRole]);
@@ -1955,9 +1955,8 @@ const OnlineDebateRoom: React.FC = () => {
             Phase: <span className="font-medium">{debatePhase}</span> |
             Participants:{" "}
             <span className="font-medium">{roomParticipants.length}/2</span> |
-            Spectators:{" "}
-            <span className="font-medium">{spectatorPresence}</span> |
-            Current Turn:{" "}
+            Spectators: <span className="font-medium">{spectatorPresence}</span>{" "}
+            | Current Turn:{" "}
             <span className="font-semibold text-orange-600">
               {isMyTurn ? "You" : "Opponent"} to{" "}
               {debatePhase.includes("Question")
@@ -2187,8 +2186,16 @@ const OnlineDebateRoom: React.FC = () => {
       {showJudgment && judgmentData && (
         <JudgmentPopup
           judgment={judgmentData}
-          forRole={localRole === "for" ? "You" : opponentUser?.displayName || "Opponent"}
-          againstRole={localRole === "against" ? "You" : opponentUser?.displayName || "Opponent"}
+          forRole={
+            localRole === "for"
+              ? "You"
+              : opponentUser?.displayName || "Opponent"
+          }
+          againstRole={
+            localRole === "against"
+              ? "You"
+              : opponentUser?.displayName || "Opponent"
+          }
           localRole={localRole ?? null}
           localDisplayName={
             localUser?.displayName ||
@@ -2196,7 +2203,9 @@ const OnlineDebateRoom: React.FC = () => {
             currentUser?.email ||
             "You"
           }
-          localAvatarUrl={localUser?.avatarUrl || currentUser?.avatarUrl || null}
+          localAvatarUrl={
+            localUser?.avatarUrl || currentUser?.avatarUrl || null
+          }
           opponentDisplayName={opponentUser?.displayName || "Opponent"}
           opponentAvatarUrl={opponentUser?.avatarUrl || null}
           ratingSummary={ratingSummary}
@@ -2334,93 +2343,94 @@ const OnlineDebateRoom: React.FC = () => {
         </div>
       )}
 
-  <div className="w-full max-w-5xl mx-auto mt-4 grid gap-4 md:grid-cols-2">
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-3">
-        Audience Polls
-      </h3>
-      <div className="space-y-3 max-h-64 overflow-y-auto">
-        {audiencePolls.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No polls in progress. Spectators can launch polls from the viewer portal.
-          </p>
-        ) : (
-          audiencePolls.map((poll: PollInfo) => {
-            const totalVotes = poll.options.reduce(
-              (acc, option) => acc + (poll.counts[option] || 0),
-              0
-            );
-            return (
-              <div
-                key={poll.pollId}
-                className="border border-gray-100 bg-gray-50 rounded-md p-3"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-gray-800">
-                    {poll.question || `Poll ${poll.pollId.slice(0, 8)}`}
-                  </span>
+      <div className="w-full max-w-5xl mx-auto mt-4 grid gap-4 md:grid-cols-2">
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">
+            Audience Polls
+          </h3>
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {audiencePolls.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No polls in progress. Spectators can launch polls from the
+                viewer portal.
+              </p>
+            ) : (
+              audiencePolls.map((poll: PollInfo) => {
+                const totalVotes = poll.options.reduce(
+                  (acc, option) => acc + (poll.counts[option] || 0),
+                  0
+                );
+                return (
+                  <div
+                    key={poll.pollId}
+                    className="border border-gray-100 bg-gray-50 rounded-md p-3"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-gray-800">
+                        {poll.question || `Poll ${poll.pollId.slice(0, 8)}`}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {totalVotes} vote{totalVotes === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {poll.options.map((option) => {
+                        const count = poll.counts[option] || 0;
+                        return (
+                          <div
+                            key={option}
+                            className="flex items-center justify-between text-xs text-gray-600"
+                          >
+                            <span>{option}</span>
+                            <span className="font-semibold text-gray-700">
+                              {count}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">
+            Audience Comments
+          </h3>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {recentQuestions.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No comments yet. Spectators can submit questions from the viewer
+                panel.
+              </p>
+            ) : (
+              recentQuestions.map((question) => (
+                <div
+                  key={question.qId}
+                  className="rounded border border-gray-100 bg-gray-50 px-3 py-2"
+                >
+                  <p className="text-sm text-gray-800">{question.text}</p>
                   <span className="text-xs text-gray-500">
-                    {totalVotes} vote{totalVotes === 1 ? "" : "s"}
+                    {new Date(question.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
-                <div className="space-y-1">
-                  {poll.options.map((option) => {
-                    const count = poll.counts[option] || 0;
-                    return (
-                      <div
-                        key={option}
-                        className="flex items-center justify-between text-xs text-gray-600"
-                      >
-                        <span>{option}</span>
-                        <span className="font-semibold text-gray-700">
-                          {count}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })
-        )}
+              ))
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-3">
-        Audience Comments
-      </h3>
-      <div className="space-y-2 max-h-64 overflow-y-auto">
-        {recentQuestions.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No comments yet. Spectators can submit questions from the viewer
-            panel.
-          </p>
-        ) : (
-          recentQuestions.map((question) => (
-            <div
-              key={question.qId}
-              className="rounded border border-gray-100 bg-gray-50 px-3 py-2"
-            >
-              <p className="text-sm text-gray-800">{question.text}</p>
-              <span className="text-xs text-gray-500">
-                {new Date(question.timestamp).toLocaleTimeString()}
-              </span>
-            </div>
-          ))
-        )}
+      <div className="w-full max-w-5xl mx-auto mt-2 bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-700">
+            Total spectators currently watching
+          </span>
+          <span className="text-lg font-semibold text-orange-600">
+            {spectatorPresence}
+          </span>
+        </div>
       </div>
-    </div>
-  </div>
-  <div className="w-full max-w-5xl mx-auto mt-2 bg-white border border-gray-200 rounded-lg shadow-sm p-4">
-    <div className="flex items-center justify-between">
-      <span className="text-sm font-semibold text-gray-700">
-        Total spectators currently watching
-      </span>
-      <span className="text-lg font-semibold text-orange-600">
-        {spectatorPresence}
-      </span>
-    </div>
-  </div>
 
       {/* Media Error Display */}
       {mediaError && (

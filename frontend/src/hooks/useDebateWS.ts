@@ -272,11 +272,11 @@ export const useDebateWS = (debateId: string | null) => {
       }
     };
 
-    rws.onerror = (err) => {
+    rws.onerror = () => {
       setWsStatus('error');
     };
 
-    rws.onclose = (event) => {
+    rws.onclose = () => {
       setWsStatus('disconnected');
       setWs(null);
     };
