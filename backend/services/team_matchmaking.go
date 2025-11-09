@@ -15,16 +15,16 @@ import (
 )
 
 var (
-	teamMatchmakingPool map[string]*TeamMatchmakingEntry // teamID -> entry
+	teamMatchmakingPool  map[string]*TeamMatchmakingEntry // teamID -> entry
 	teamMatchmakingMutex sync.RWMutex
 )
 
 type TeamMatchmakingEntry struct {
-	TeamID    primitive.ObjectID
-	Team      models.Team
-	MaxSize   int
+	TeamID     primitive.ObjectID
+	Team       models.Team
+	MaxSize    int
 	AverageElo float64
-	Timestamp time.Time
+	Timestamp  time.Time
 }
 
 // StartTeamMatchmaking adds a team to the matchmaking pool
@@ -32,7 +32,9 @@ func StartTeamMatchmaking(teamID primitive.ObjectID) error {
 	// Get team details
 	collection := db.GetCollection("teams")
 	var team models.Team
-	err := collection.FindOne(context.Background(), bson.M{"_id": teamID}).Decode(&team)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := collection.FindOne(ctx, bson.M{"_id": teamID}).Decode(&team)
 	if err != nil {
 		return err
 	}
@@ -51,11 +53,11 @@ func StartTeamMatchmaking(teamID primitive.ObjectID) error {
 	}
 
 	teamMatchmakingPool[teamID.Hex()] = &TeamMatchmakingEntry{
-		TeamID:    teamID,
-		Team:      team,
-		MaxSize:   team.MaxSize,
+		TeamID:     teamID,
+		Team:       team,
+		MaxSize:    team.MaxSize,
 		AverageElo: team.AverageElo,
-		Timestamp: time.Now(),
+		Timestamp:  time.Now(),
 	}
 
 	return nil
@@ -76,7 +78,7 @@ func FindMatchingTeam(lookingTeamID primitive.ObjectID) (*models.Team, error) {
 	}
 
 	// Log pool status for debugging
-	log.Printf("Matchmaking pool size: %d, looking team: %s (Elo: %.2f)", 
+	log.Printf("Matchmaking pool size: %d, looking team: %s (Elo: %.2f)",
 		len(teamMatchmakingPool), lookingTeamID.Hex(), lookingEntry.AverageElo)
 
 	// Find teams with matching size and similar elo
@@ -86,7 +88,7 @@ func FindMatchingTeam(lookingTeamID primitive.ObjectID) (*models.Team, error) {
 		}
 
 		// Log each comparison
-		log.Printf("Comparing %s (Elo: %.2f) with %s (Elo: %.2f)", 
+		log.Printf("Comparing %s (Elo: %.2f) with %s (Elo: %.2f)",
 			lookingTeamID.Hex(), lookingEntry.AverageElo,
 			teamID, entry.AverageElo)
 
@@ -97,9 +99,9 @@ func FindMatchingTeam(lookingTeamID primitive.ObjectID) (*models.Team, error) {
 			if eloDiff < 0 {
 				eloDiff = -eloDiff
 			}
-			
+
 			log.Printf("Size match: %d, Elo diff: %.2f (threshold: 200)", entry.MaxSize, eloDiff)
-			
+
 			if eloDiff <= 200 {
 				log.Printf("Match found! %s vs %s", lookingTeamID.Hex(), teamID)
 				return &entry.Team, nil
@@ -136,4 +138,3 @@ func GetMatchmakingPool() map[string]*TeamMatchmakingEntry {
 	}
 	return snapshot
 }
-

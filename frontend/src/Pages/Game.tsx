@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import PlayerCard from "../components/PlayerCard";
 import UserCamera from "../components/UserCamera";
-import Chatbox, { ChatMessage } from "../components/Chatbox";
+import Chatbox, { ChatMessage, TypingIndicator } from "../components/Chatbox";
 
 const Game: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -28,6 +28,7 @@ const Game: React.FC = () => {
       loading: false,
       isUser: false,
     },
+    typingIndicators: [] as TypingIndicator[],
   });
 
   const websocketRef = useRef<WebSocket | null>(null);
@@ -37,6 +38,18 @@ const Game: React.FC = () => {
     content?: string;
     [key: string]: unknown;
   };
+
+  const parseContent = useCallback(
+    <T,>(raw: string, messageType: string): T | null => {
+      try {
+        return JSON.parse(raw) as T;
+      } catch (error) {
+        console.error(`Failed to parse ${messageType} content:`, error);
+        return null;
+      }
+    },
+    []
+  );
 
   const handleWebSocketMessage = useCallback(
     (message: GameWebSocketMessage) => {
@@ -52,7 +65,14 @@ const Game: React.FC = () => {
             console.warn("TURN_START received without content");
             break;
           }
-          const { currentTurn, duration } = JSON.parse(message.content);
+          const parsed = parseContent<{ currentTurn: string; duration: number }>(
+            message.content,
+            "TURN_START"
+          );
+          if (!parsed) {
+            break;
+          }
+          const { currentTurn, duration } = parsed;
           setState((prevState) => ({
             ...prevState,
             isTurn: currentTurn === userId,
@@ -72,7 +92,15 @@ const Game: React.FC = () => {
             console.warn("CHAT_MESSAGE received without content");
             break;
           }
-          const { sender, message: chatMessage } = JSON.parse(message.content);
+          const parsed = parseContent<{
+            sender: string;
+            message: string;
+            username?: string;
+          }>(message.content, "CHAT_MESSAGE");
+          if (!parsed) {
+            break;
+          }
+          const { sender, message: chatMessage } = parsed;
           const newMessage: ChatMessage = {
             isUser: sender === userId,
             text: chatMessage,
@@ -81,6 +109,9 @@ const Game: React.FC = () => {
             ...prevState,
             messages: [...prevState.messages, newMessage],
             transcriptStatus: { ...prevState.transcriptStatus, loading: false },
+            typingIndicators: prevState.typingIndicators.filter(
+              (indicator) => indicator.userId !== sender
+            ),
           }));
           break;
         }
@@ -89,11 +120,108 @@ const Game: React.FC = () => {
             console.warn("GENERATING_TRANSCRIPT received without content");
             break;
           }
-          const { sender } = JSON.parse(message.content);
+          const parsed = parseContent<{ sender: string }>(
+            message.content,
+            "GENERATING_TRANSCRIPT"
+          );
+          if (!parsed) {
+            break;
+          }
+          const { sender } = parsed;
           setState((prevState) => ({
             ...prevState,
             transcriptStatus: { loading: true, isUser: sender === userId }, //transcript is getting generated
           }));
+          break;
+        }
+
+        case "TYPING_START":
+        case "TYPING_STOP": {
+          if (!message.content) {
+            console.warn(`${message.type} received without content`);
+            break;
+          }
+          const parsed = parseContent<{
+            userId: string;
+            username?: string;
+            partialText?: string;
+          }>(message.content, message.type);
+          if (!parsed || !parsed.userId || parsed.userId === userId) {
+            break;
+          }
+          const isTyping = message.type === "TYPING_START";
+          setState((prevState) => {
+            const existing = prevState.typingIndicators.find(
+              (indicator) => indicator.userId === parsed.userId
+            );
+            const others = prevState.typingIndicators.filter(
+              (indicator) => indicator.userId !== parsed.userId
+            );
+            const baseIndicator: TypingIndicator =
+              existing ?? {
+                userId: parsed.userId,
+                username: parsed.username ?? "Opponent",
+                isTyping: false,
+                isSpeaking: false,
+              };
+            const updatedIndicator: TypingIndicator = {
+              ...baseIndicator,
+              username: parsed.username ?? baseIndicator.username,
+              isTyping,
+              partialText: isTyping ? parsed.partialText : undefined,
+            };
+            if (!updatedIndicator.isTyping && !updatedIndicator.isSpeaking) {
+              return { ...prevState, typingIndicators: others };
+            }
+            return {
+              ...prevState,
+              typingIndicators: [...others, updatedIndicator],
+            };
+          });
+          break;
+        }
+
+        case "SPEAKING_START":
+        case "SPEAKING_STOP": {
+          if (!message.content) {
+            console.warn(`${message.type} received without content`);
+            break;
+          }
+          const parsed = parseContent<{
+            userId: string;
+            username?: string;
+          }>(message.content, message.type);
+          if (!parsed || !parsed.userId || parsed.userId === userId) {
+            break;
+          }
+          const isSpeaking = message.type === "SPEAKING_START";
+          setState((prevState) => {
+            const existing = prevState.typingIndicators.find(
+              (indicator) => indicator.userId === parsed.userId
+            );
+            const others = prevState.typingIndicators.filter(
+              (indicator) => indicator.userId !== parsed.userId
+            );
+            const baseIndicator: TypingIndicator =
+              existing ?? {
+                userId: parsed.userId,
+                username: parsed.username ?? "Opponent",
+                isTyping: false,
+                isSpeaking: false,
+              };
+            const updatedIndicator: TypingIndicator = {
+              ...baseIndicator,
+              username: parsed.username ?? baseIndicator.username,
+              isSpeaking,
+            };
+            if (!updatedIndicator.isTyping && !updatedIndicator.isSpeaking) {
+              return { ...prevState, typingIndicators: others };
+            }
+            return {
+              ...prevState,
+              typingIndicators: [...others, updatedIndicator],
+            };
+          });
           break;
         }
 
@@ -103,8 +231,17 @@ const Game: React.FC = () => {
             console.warn("GAME_RESULT received without content");
             break;
           }
+          const parsed = parseContent<{
+            winnerUserId: string;
+            points: number;
+            totalPoints: number;
+            evaluationMessage: string;
+          }>(message.content, "GAME_RESULT");
+          if (!parsed) {
+            break;
+          }
           const { winnerUserId, points, totalPoints, evaluationMessage } =
-            JSON.parse(message.content);
+            parsed;
           setState((prevState) => ({
             ...prevState,
             gameResult: {
@@ -122,7 +259,7 @@ const Game: React.FC = () => {
           console.warn("Unhandled message type:", message.type);
       }
     },
-    [userId]
+    [userId, parseContent]
   );
 
   useEffect(() => {
@@ -132,7 +269,13 @@ const Game: React.FC = () => {
     websocketRef.current = ws;
 
     ws.onopen = () => console.log("WebSocket connection established");
-    ws.onmessage = (event) => handleWebSocketMessage(JSON.parse(event.data));
+    ws.onmessage = (event) => {
+      try {
+        handleWebSocketMessage(JSON.parse(event.data));
+      } catch (error) {
+        console.error("Failed to parse WebSocket message:", error);
+      }
+    };
     ws.onerror = (error) => console.error("WebSocket error:", error);
     ws.onclose = () => console.log("WebSocket connection closed");
 
@@ -211,11 +354,15 @@ const Game: React.FC = () => {
         <Chatbox
           messages={state.messages}
           transcriptStatus={state.transcriptStatus}
-          onSendMessage={(message) => {
+          onSendMessage={(message, mode) => {
             if (!message.trim()) return;
             const payload = {
               type: "CHAT_MESSAGE",
-              content: message,
+              content: JSON.stringify({
+                sender: userId,
+                message,
+                mode,
+              }),
               timestamp: Date.now(),
             };
 
@@ -231,7 +378,7 @@ const Game: React.FC = () => {
               messages: [...prev.messages, { isUser: true, text: message }],
             }));
           }}
-          onTypingChange={(isTyping) => {
+          onTypingChange={(isTyping, partialText) => {
             if (
               !websocketRef.current ||
               websocketRef.current.readyState !== WebSocket.OPEN
@@ -242,6 +389,10 @@ const Game: React.FC = () => {
             websocketRef.current.send(
               JSON.stringify({
                 type: isTyping ? "TYPING_START" : "TYPING_STOP",
+                content: JSON.stringify({
+                  userId,
+                  partialText: isTyping ? partialText : undefined,
+                }),
                 timestamp: Date.now(),
               })
             );
@@ -257,11 +408,14 @@ const Game: React.FC = () => {
             websocketRef.current.send(
               JSON.stringify({
                 type: isSpeaking ? "SPEAKING_START" : "SPEAKING_STOP",
+                content: JSON.stringify({
+                  userId,
+                }),
                 timestamp: Date.now(),
               })
             );
           }}
-          typingIndicators={[]}
+          typingIndicators={state.typingIndicators}
           isMyTurn={state.isTurn}
           disabled={!(state.isTurn && !state.gameEnded)}
         />
