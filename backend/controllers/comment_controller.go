@@ -53,9 +53,12 @@ func CreateCommentHandler(c *gin.Context) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
 	// Get user details
 	var user models.User
-	err = db.MongoDatabase.Collection("users").FindOne(c, bson.M{"_id": userID}).Decode(&user)
+	err = db.MongoDatabase.Collection("users").FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user"})
 		return
@@ -81,14 +84,11 @@ func CreateCommentHandler(c *gin.Context) {
 			comment.ParentID = &parentObjectID
 			// Get parent comment to build path
 			var parent models.Comment
-			if err := db.MongoDatabase.Collection("comments").FindOne(c, bson.M{"_id": parentObjectID}).Decode(&parent); err == nil {
+			if err := db.MongoDatabase.Collection("comments").FindOne(ctx, bson.M{"_id": parentObjectID}).Decode(&parent); err == nil {
 				comment.Path = append(parent.Path, parentObjectID.Hex())
 			}
 		}
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	_, err = db.MongoDatabase.Collection("comments").InsertOne(ctx, comment)
 	if err != nil {
@@ -125,7 +125,10 @@ func GetCommentsHandler(c *gin.Context) {
 	defer cursor.Close(ctx)
 
 	var comments []models.Comment
-	cursor.All(ctx, &comments)
+	if err := cursor.All(ctx, &comments); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode comments"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"comments": comments})
 }
 

@@ -66,7 +66,7 @@ func FollowUserHandler(c *gin.Context) {
 	defer cancel()
 
 	followCollection := db.MongoDatabase.Collection("user_follows")
-	
+
 	// Check if already following
 	var existing models.UserFollow
 	err = followCollection.FindOne(ctx, bson.M{"followerId": followerID, "followingId": followingID}).Decode(&existing)
@@ -158,7 +158,10 @@ func GetFollowersHandler(c *gin.Context) {
 	defer cursor.Close(ctx)
 
 	var follows []models.UserFollow
-	cursor.All(ctx, &follows)
+	if err := cursor.All(ctx, &follows); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch followers"})
+		return
+	}
 
 	var followerIDs []primitive.ObjectID
 	for _, f := range follows {
@@ -168,10 +171,15 @@ func GetFollowersHandler(c *gin.Context) {
 	var users []models.User
 	if len(followerIDs) > 0 {
 		userCollection := db.MongoDatabase.Collection("users")
-		cursor, err := userCollection.Find(ctx, bson.M{"_id": bson.M{"$in": followerIDs}})
-		if err == nil {
-			cursor.All(ctx, &users)
-			cursor.Close(ctx)
+		detailsCursor, err := userCollection.Find(ctx, bson.M{"_id": bson.M{"$in": followerIDs}})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load follower details"})
+			return
+		}
+		defer detailsCursor.Close(ctx)
+		if err := detailsCursor.All(ctx, &users); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load follower details"})
+			return
 		}
 	}
 
@@ -199,7 +207,10 @@ func GetFollowingHandler(c *gin.Context) {
 	defer cursor.Close(ctx)
 
 	var follows []models.UserFollow
-	cursor.All(ctx, &follows)
+	if err := cursor.All(ctx, &follows); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch following"})
+		return
+	}
 
 	var followingIDs []primitive.ObjectID
 	for _, f := range follows {
@@ -209,10 +220,15 @@ func GetFollowingHandler(c *gin.Context) {
 	var users []models.User
 	if len(followingIDs) > 0 {
 		userCollection := db.MongoDatabase.Collection("users")
-		cursor, err := userCollection.Find(ctx, bson.M{"_id": bson.M{"$in": followingIDs}})
-		if err == nil {
-			cursor.All(ctx, &users)
-			cursor.Close(ctx)
+		detailsCursor, err := userCollection.Find(ctx, bson.M{"_id": bson.M{"$in": followingIDs}})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load following details"})
+			return
+		}
+		defer detailsCursor.Close(ctx)
+		if err := detailsCursor.All(ctx, &users); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load following details"})
+			return
 		}
 	}
 

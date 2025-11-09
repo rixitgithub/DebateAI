@@ -190,6 +190,21 @@ const TeamDebateRoom: React.FC = () => {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(true);
 
+  const toggleCamera = useCallback(() => {
+    if (!localStreamRef.current) {
+      return;
+    }
+    const [videoTrack] = localStreamRef.current.getVideoTracks();
+    if (!videoTrack) {
+      return;
+    }
+    setIsCameraOn((prev) => {
+      const next = !prev;
+      videoTrack.enabled = next;
+      return next;
+    });
+  }, []);
+
   // Timer state
   const [timer, setTimer] = useState<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -549,7 +564,7 @@ const TeamDebateRoom: React.FC = () => {
         case "topicChange":
           if (data.topic !== undefined) setTopic(data.topic);
           break;
-        case "roleSelection":
+        case "roleSelection": {
           if (data.role && data.teamId) {
             // Determine if this is from our team or opponent team based on teamId
             const messageTeamId = data.teamId;
@@ -566,7 +581,8 @@ const TeamDebateRoom: React.FC = () => {
             }
           }
           break;
-        case "countdownStart":
+        }
+        case "countdownStart": {
           // Backend is starting countdown - show it to all users
           const countdownValue = (data as any).countdown || 3;
           console.log('✓✓✓ COUNTDOWN STARTED FROM BACKEND:', countdownValue);
@@ -574,12 +590,13 @@ const TeamDebateRoom: React.FC = () => {
           // Hide setup popup when countdown starts
           setShowSetupPopup(false);
           break;
+        }
         case "checkStart":
           // Ignore checkStart messages from backend (we shouldn't receive them)
           // This is sent by frontend to backend, not the other way around
           console.log('Received checkStart message (ignoring - this is from us)');
           break;
-        case "ready":
+        case "ready": {
           console.log("=== READY MESSAGE RECEIVED ===");
           console.log("Received ready message:", data);
           console.log("Current user:", currentUser?.id);
@@ -673,6 +690,7 @@ const TeamDebateRoom: React.FC = () => {
           setPeerReady(allOppReady);
           console.log("=== END READY MESSAGE ===");
           break;
+        }
         case "phaseChange":
           if (data.phase) {
             const newPhase = data.phase as DebatePhase;

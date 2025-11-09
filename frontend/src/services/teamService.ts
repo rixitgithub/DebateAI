@@ -1,5 +1,7 @@
+import { getAuthToken } from "@/utils/auth";
+
 // Team service for API calls
-const API_BASE_URL = "http://localhost:1313";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:1313";
 
 export interface Team {
   id: string;
@@ -51,11 +53,6 @@ export interface CreateTeamDebateData {
   team1Stance: string;
   team2Stance: string;
 }
-
-// Get auth token from local storage
-const getAuthToken = () => {
-  return localStorage.getItem("token");
-};
 
 // Create a new team
 export const createTeam = async (data: CreateTeamData): Promise<Team> => {

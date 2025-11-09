@@ -50,31 +50,32 @@ func ToggleLikeHandler(c *gin.Context) {
 	userKey := "post:" + postID + ":user:" + userID.Hex()
 
 	postCollection := db.MongoDatabase.Collection("debate_posts")
+	ctx := c.Request.Context()
 
 	// Check if user already liked using Exists (atomic check)
-	exists, err := db.RedisClient.Exists(c, userKey).Result()
+	exists, err := db.RedisClient.Exists(ctx, userKey).Result()
 	alreadyLiked := err == nil && exists > 0
-	
+
 	if alreadyLiked {
 		// Unlike - remove user like and decrement count
 		// Use DEL to remove the key atomically
-		_, err = db.RedisClient.Del(c, userKey).Result()
+		_, err = db.RedisClient.Del(ctx, userKey).Result()
 		if err == nil {
-			db.RedisClient.ZIncrBy(c, key, -1, postID)
-			
+			db.RedisClient.ZIncrBy(ctx, key, -1, postID)
+
 			// Update MongoDB like count (decrement)
-			postCollection.UpdateOne(c, bson.M{"_id": postObjectID}, bson.M{"$inc": bson.M{"likeCount": -1}})
+			postCollection.UpdateOne(ctx, bson.M{"_id": postObjectID}, bson.M{"$inc": bson.M{"likeCount": -1}})
 		}
-		
+
 		// Get updated count
 		var post struct {
 			LikeCount int64 `bson:"likeCount"`
 		}
-		postCollection.FindOne(c, bson.M{"_id": postObjectID}).Decode(&post)
-		
+		postCollection.FindOne(ctx, bson.M{"_id": postObjectID}).Decode(&post)
+
 		c.JSON(http.StatusOK, gin.H{
-			"liked": false,
-			"count": post.LikeCount,
+			"liked":   false,
+			"count":   post.LikeCount,
 			"message": "Unliked",
 		})
 		return
@@ -83,28 +84,28 @@ func ToggleLikeHandler(c *gin.Context) {
 	// Like - add user like and increment count
 	// Use SetNX to ensure atomic operation - only set if not exists
 	// This prevents race conditions where multiple requests try to like simultaneously
-	set, err := db.RedisClient.SetNX(c, userKey, "1", 0).Result()
+	set, err := db.RedisClient.SetNX(ctx, userKey, "1", 0).Result()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to like post"})
 		return
 	}
-	
+
 	// Only increment if we successfully set the key (user hasn't liked before)
 	if set {
-		db.RedisClient.ZIncrBy(c, key, 1, postID)
-		
+		db.RedisClient.ZIncrBy(ctx, key, 1, postID)
+
 		// Update MongoDB like count (increment)
-		postCollection.UpdateOne(c, bson.M{"_id": postObjectID}, bson.M{"$inc": bson.M{"likeCount": 1}})
-		
+		postCollection.UpdateOne(ctx, bson.M{"_id": postObjectID}, bson.M{"$inc": bson.M{"likeCount": 1}})
+
 		// Get updated count
 		var post struct {
 			LikeCount int64 `bson:"likeCount"`
 		}
-		postCollection.FindOne(c, bson.M{"_id": postObjectID}).Decode(&post)
+		postCollection.FindOne(ctx, bson.M{"_id": postObjectID}).Decode(&post)
 
 		c.JSON(http.StatusOK, gin.H{
-			"liked": true,
-			"count": post.LikeCount,
+			"liked":   true,
+			"count":   post.LikeCount,
 			"message": "Liked",
 		})
 	} else {
@@ -113,11 +114,11 @@ func ToggleLikeHandler(c *gin.Context) {
 		var post struct {
 			LikeCount int64 `bson:"likeCount"`
 		}
-		postCollection.FindOne(c, bson.M{"_id": postObjectID}).Decode(&post)
-		
+		postCollection.FindOne(ctx, bson.M{"_id": postObjectID}).Decode(&post)
+
 		c.JSON(http.StatusOK, gin.H{
-			"liked": true,
-			"count": post.LikeCount,
+			"liked":   true,
+			"count":   post.LikeCount,
 			"message": "Already liked",
 		})
 	}
@@ -133,10 +134,11 @@ func GetLikesHandler(c *gin.Context) {
 	}
 
 	postCollection := db.MongoDatabase.Collection("debate_posts")
+	ctx := c.Request.Context()
 	var post struct {
 		LikeCount int64 `bson:"likeCount"`
 	}
-	err = postCollection.FindOne(c, bson.M{"_id": postObjectID}).Decode(&post)
+	err = postCollection.FindOne(ctx, bson.M{"_id": postObjectID}).Decode(&post)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 		return
@@ -152,7 +154,7 @@ func GetLikesHandler(c *gin.Context) {
 			userID, err := utils.GetUserIDFromEmail(email)
 			if err == nil {
 				userKey := "post:" + postID + ":user:" + userID.Hex()
-				exists, _ := db.RedisClient.Exists(c, userKey).Result()
+				exists, _ := db.RedisClient.Exists(ctx, userKey).Result()
 				liked = exists > 0
 			}
 		}

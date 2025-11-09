@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -83,6 +84,11 @@ func CreatePostHandler(c *gin.Context) {
 	err = postCollection.FindOne(ctx, bson.M{"transcriptId": transcriptObjectID}).Decode(&existingPost)
 	if err == nil {
 		c.JSON(http.StatusOK, gin.H{"post": existingPost, "message": "Post already exists"})
+		return
+	}
+	if err != mongo.ErrNoDocuments {
+		log.Printf("Failed to check existing post: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post"})
 		return
 	}
 
