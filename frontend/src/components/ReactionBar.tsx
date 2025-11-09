@@ -57,7 +57,10 @@ export const ReactionBar: React.FC = () => {
   const handleReaction = (emoji: string) => {
     if (!debateId) return;
     const effectiveHash =
-      spectatorHash || localStorage.getItem("spectatorHash") || "";
+      spectatorHash ||
+      localStorage.getItem('spectatorHash') ||
+      localStorage.getItem('spectatorId') ||
+      '';
 
     if (!effectiveHash) return;
 

@@ -422,12 +422,6 @@ func WebsocketHandler(c *gin.Context) {
 					req["spectatorDisplayName"] = client.Username
 					if enriched, err := json.Marshal(req); err == nil {
 						broadcastRawToDebaters(room, conn, enriched)
-						if message.Type == "offer" && !client.IsSpectator {
-							var payload map[string]interface{}
-							if err := json.Unmarshal(msg, &payload); err == nil {
-								log.Printf("[ws] forwarding offer: room=%s from=%s connectionId=%v", roomID, client.Email, payload["connectionId"])
-							}
-						}
 						continue
 					}
 				}

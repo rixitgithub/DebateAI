@@ -174,6 +174,7 @@ const TeamDebateRoom: React.FC = () => {
   const localStreamRef = useRef<MediaStream | null>(null);
   const debateStartedRef = useRef<boolean>(false); // Track if debate has started to prevent popup reopening
   const isTeam1Ref = useRef<boolean>(isTeam1);
+  const myTeamIdRef = useRef<string | null>(myTeamId);
   const debatePhaseRef = useRef<DebatePhase>(debatePhase);
   const currentUserIdRef = useRef<string | undefined>(currentUser?.id);
 
@@ -347,6 +348,10 @@ const TeamDebateRoom: React.FC = () => {
   }, [isTeam1]);
 
   useEffect(() => {
+    myTeamIdRef.current = myTeamId;
+  }, [myTeamId]);
+
+  useEffect(() => {
     debatePhaseRef.current = debatePhase;
   }, [debatePhase]);
 
@@ -397,6 +402,7 @@ const TeamDebateRoom: React.FC = () => {
       const isTeam1Latest = isTeam1Ref.current;
       const currentUserIdLatest = currentUserIdRef.current;
       const currentPhaseLatest = debatePhaseRef.current;
+      const myTeamIdLatest = myTeamIdRef.current;
 
       switch (data.type) {
         case "stateSync":
@@ -534,7 +540,7 @@ const TeamDebateRoom: React.FC = () => {
           if (data.role && data.teamId) {
             // Determine if this is from our team or opponent team based on teamId
             const messageTeamId = data.teamId;
-            const isFromMyTeam = messageTeamId === myTeamId;
+            const isFromMyTeam = messageTeamId === myTeamIdLatest;
             
             if (isFromMyTeam) {
               // This role selection is from my team

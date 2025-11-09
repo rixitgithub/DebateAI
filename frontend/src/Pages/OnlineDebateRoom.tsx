@@ -322,7 +322,7 @@ const OnlineDebateRoom: React.FC = () => {
             JSON.stringify({
               type: "candidate",
               candidate: event.candidate,
-              userId: currentUserId,
+              userId,
               connectionId,
             })
           );
@@ -556,6 +556,15 @@ const OnlineDebateRoom: React.FC = () => {
       }
     }, 2000);
   };
+
+  useEffect(() => {
+    return () => {
+      if (judgePollRef.current) {
+        clearInterval(judgePollRef.current);
+        judgePollRef.current = null;
+      }
+    };
+  }, []);
 
   // Function to send transcripts to backend
   const sendTranscriptsToBackend = async (

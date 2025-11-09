@@ -36,12 +36,16 @@ export const useDebateWS = (debateId: string | null) => {
     setDebateId(debateId);
     setWsStatus('connecting');
 
-    // Get WebSocket URL - use localhost:1313 directly for development
+    // Get WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Use localhost:1313 directly or construct from VITE_API_URL
-    let host = 'localhost:1313';
-    if (import.meta.env.VITE_API_URL) {
-      host = import.meta.env.VITE_API_URL.replace(/^https?:\/\//, '');
+    const apiUrl = import.meta.env.VITE_API_URL;
+    let host = window.location.host;
+    if (apiUrl) {
+      try {
+        host = new URL(apiUrl).host;
+      } catch {
+        host = apiUrl.replace(/^https?:\/\//, '');
+      }
     }
     
     // Ensure we have a spectator ID
@@ -261,10 +265,11 @@ export const useDebateWS = (debateId: string | null) => {
             });
             break;
 
-          case 'presence':
+          case 'presence': {
             const count = eventData.payload.connected || 0;
             setPresence(count);
             break;
+          }
 
           default:
         }

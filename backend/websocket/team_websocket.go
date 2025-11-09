@@ -3,7 +3,9 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,7 +17,6 @@ import (
 	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"strings"
 )
 
 // TeamRoom represents a team debate room with connected team members
@@ -252,7 +253,11 @@ func TeamWebsocketHandler(c *gin.Context) {
 	room.Mutex.Unlock()
 
 	// Send initial team status
-	teamStatus := room.TokenBucket.GetTeamSpeakingStatus(userTeamID, room.TurnManager)
+	teamStatus, statusErr := room.TokenBucket.GetTeamSpeakingStatus(userTeamID, room.TurnManager)
+	if statusErr != nil {
+		log.Printf("failed to load team status for team %s: %v", userTeamID.Hex(), statusErr)
+		teamStatus = map[string]interface{}{}
+	}
 	client.SafeWriteJSON(map[string]interface{}{
 		"type":        "teamStatus",
 		"teamStatus":  teamStatus,
@@ -395,7 +400,11 @@ func snapshotTeamRecipients(room *TeamRoom, exclude *websocket.Conn) []*TeamClie
 // handleTeamJoin handles team join messages
 func handleTeamJoin(room *TeamRoom, conn *websocket.Conn, message TeamMessage, client *TeamClient, roomKey string) {
 	// Send team status to all clients
-	teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
+	teamStatus, statusErr := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
+	if statusErr != nil {
+		log.Printf("failed to load team status for team %s: %v", client.TeamID.Hex(), statusErr)
+		teamStatus = map[string]interface{}{}
+	}
 
 	// Broadcast to all clients in the room
 	recipients := snapshotTeamRecipients(room, nil)
@@ -757,13 +766,13 @@ func handleTeamReadyStatus(room *TeamRoom, conn *websocket.Conn, message TeamMes
 
 // handleTeamTurnRequest handles turn requests
 func handleTeamTurnRequest(room *TeamRoom, conn *websocket.Conn, message TeamMessage, client *TeamClient, roomKey string) {
-	// Check if user can speak
-	canSpeak := room.TokenBucket.CanUserSpeak(client.TeamID, client.UserID, room.TurnManager)
+	// Attempt to consume tokens if the user is allowed to speak
+	canSpeak, remainingTokens := room.TokenBucket.TryConsumeForSpeaking(client.TeamID, client.UserID, room.TurnManager)
 
 	if canSpeak {
 		// Update client tokens
 		room.Mutex.Lock()
-		client.Tokens = room.TokenBucket.GetRemainingTokens(client.TeamID, client.UserID)
+		client.Tokens = remainingTokens
 		room.Mutex.Unlock()
 
 		// Send turn granted response
@@ -777,7 +786,11 @@ func handleTeamTurnRequest(room *TeamRoom, conn *websocket.Conn, message TeamMes
 		client.SafeWriteJSON(response)
 
 		// Broadcast turn status to all clients
-		teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
+		teamStatus, statusErr := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
+		if statusErr != nil {
+			log.Printf("failed to load team status for team %s: %v", client.TeamID.Hex(), statusErr)
+			teamStatus = map[string]interface{}{}
+		}
 		recipients := snapshotTeamRecipients(room, nil)
 		for _, r := range recipients {
 			if r.TeamID == client.TeamID {
@@ -808,7 +821,11 @@ func handleTeamTurnEnd(room *TeamRoom, conn *websocket.Conn, message TeamMessage
 	nextUserID := room.TurnManager.NextTurn(client.TeamID)
 
 	// Update team status
-	teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
+	teamStatus, statusErr := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
+	if statusErr != nil {
+		log.Printf("failed to load team status for team %s: %v", client.TeamID.Hex(), statusErr)
+		teamStatus = map[string]interface{}{}
+	}
 
 	// Broadcast turn change to all clients in the team
 	recipients := snapshotTeamRecipients(room, nil)

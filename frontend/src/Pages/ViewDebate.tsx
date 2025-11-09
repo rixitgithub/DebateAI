@@ -81,10 +81,18 @@ export const ViewDebate: React.FC = () => {
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host =
-      import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, "") ||
-      "localhost:1313";
-    const wsUrl = `${protocol}//${host}/ws?room=${debateID}&token=${token}&spectator=true`;
+    const apiUrl = import.meta.env.VITE_API_URL;
+    let host = window.location.host;
+    if (apiUrl) {
+      try {
+        host = new URL(apiUrl).host;
+      } catch {
+        host = apiUrl.replace(/^https?:\/\//, "");
+      }
+    }
+    const wsUrl = `${protocol}//${host}/ws?room=${debateID}&token=${encodeURIComponent(
+      token
+    )}&spectator=true`;
     const ws = new WebSocket(wsUrl);
     roomWsRef.current = ws;
 
