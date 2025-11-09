@@ -77,6 +77,25 @@ func LeaveMatchmaking(c *gin.Context) {
 		return
 	}
 
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	collection := db.GetCollection("teams")
+	var team models.Team
+	err = collection.FindOne(context.Background(), bson.M{"_id": objectID}).Decode(&team)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Team not found"})
+		return
+	}
+
+	if team.CaptainID != userID.(primitive.ObjectID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only the captain can leave matchmaking"})
+		return
+	}
+
 	services.RemoveFromMatchmaking(objectID)
 	c.JSON(http.StatusOK, gin.H{"message": "Team removed from matchmaking"})
 }

@@ -118,7 +118,11 @@ func TeamWebsocketHandler(c *gin.Context) {
 	}
 
 	// Validate token
-	valid, email, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "./config/config.yml"
+	}
+	valid, email, err := utils.ValidateTokenAndFetchEmail(configPath, token, c)
 	if err != nil || !valid || email == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
@@ -189,37 +193,49 @@ func TeamWebsocketHandler(c *gin.Context) {
 		}
 	}
 
-	// Create or get team room
-	teamRoomsMutex.Lock()
+	// Prepare room outside lock
 	roomKey := debateID
-	if _, exists := teamRooms[roomKey]; !exists {
-		turnManager := services.NewTeamTurnManager()
-		tokenBucket := services.NewTokenBucketService()
+	turnManager := services.NewTeamTurnManager()
+	tokenBucket := services.NewTokenBucketService()
 
-		// Initialize turn management for both teams
-		turnManager.InitializeTeamTurns(debate.Team1ID)
-		turnManager.InitializeTeamTurns(debate.Team2ID)
+	// Initialize turn management for both teams
+	turnErr1 := turnManager.InitializeTeamTurns(debate.Team1ID)
+	turnErr2 := turnManager.InitializeTeamTurns(debate.Team2ID)
 
-		// Initialize token buckets for both teams
-		tokenBucket.InitializeTeamBuckets(debate.Team1ID)
-		tokenBucket.InitializeTeamBuckets(debate.Team2ID)
+	// Initialize token buckets for both teams
+	bucketErr1 := tokenBucket.InitializeTeamBuckets(debate.Team1ID)
+	bucketErr2 := tokenBucket.InitializeTeamBuckets(debate.Team2ID)
 
-		teamRooms[roomKey] = &TeamRoom{
-			Clients:      make(map[*websocket.Conn]*TeamClient),
-			Team1ID:      debate.Team1ID,
-			Team2ID:      debate.Team2ID,
-			DebateID:     debateObjectID,
-			TurnManager:  turnManager,
-			TokenBucket:  tokenBucket,
-			CurrentTopic: debate.Topic,
-			CurrentPhase: "setup",
-			Team1Role:    debate.Team1Stance,
-			Team2Role:    debate.Team2Stance,
-			Team1Ready:   make(map[string]bool),
-			Team2Ready:   make(map[string]bool),
-		}
+	if turnErr1 != nil || turnErr2 != nil || bucketErr1 != nil || bucketErr2 != nil {
+		log.Printf("error initializing room resources: %v %v %v %v", turnErr1, turnErr2, bucketErr1, bucketErr2)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize room resources"})
+		return
 	}
-	room := teamRooms[roomKey]
+
+	preparedRoom := &TeamRoom{
+		Clients:      make(map[*websocket.Conn]*TeamClient),
+		Team1ID:      debate.Team1ID,
+		Team2ID:      debate.Team2ID,
+		DebateID:     debateObjectID,
+		TurnManager:  turnManager,
+		TokenBucket:  tokenBucket,
+		CurrentTopic: debate.Topic,
+		CurrentPhase: "setup",
+		Team1Role:    debate.Team1Stance,
+		Team2Role:    debate.Team2Stance,
+		Team1Ready:   make(map[string]bool),
+		Team2Ready:   make(map[string]bool),
+	}
+
+	// Insert room if absent
+	teamRoomsMutex.Lock()
+	room, exists := teamRooms[roomKey]
+	if !exists {
+		teamRooms[roomKey] = preparedRoom
+		room = preparedRoom
+	} else {
+		// discard prepared room; existing room will be used
+	}
 	teamRoomsMutex.Unlock()
 
 	// Upgrade the connection

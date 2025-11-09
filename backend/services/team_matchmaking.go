@@ -67,7 +67,7 @@ func FindMatchingTeam(lookingTeamID primitive.ObjectID) (*models.Team, error) {
 	defer teamMatchmakingMutex.RUnlock()
 
 	if teamMatchmakingPool == nil {
-		teamMatchmakingPool = make(map[string]*TeamMatchmakingEntry)
+		return nil, mongo.ErrNoDocuments
 	}
 
 	lookingEntry, exists := teamMatchmakingPool[lookingTeamID.Hex()]
@@ -129,6 +129,11 @@ func GetMatchmakingPool() map[string]*TeamMatchmakingEntry {
 	if teamMatchmakingPool == nil {
 		return make(map[string]*TeamMatchmakingEntry)
 	}
-	return teamMatchmakingPool
+	snapshot := make(map[string]*TeamMatchmakingEntry, len(teamMatchmakingPool))
+	for teamID, entry := range teamMatchmakingPool {
+		clone := *entry
+		snapshot[teamID] = &clone
+	}
+	return snapshot
 }
 

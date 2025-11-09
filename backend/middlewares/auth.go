@@ -51,7 +51,14 @@ func AuthMiddleware(configPath string) gin.HandlerFunc {
 			return
 		}
 
-		email := claims["sub"].(string)
+		email, ok := claims["sub"].(string)
+	if !ok || email == "" {
+		log.Printf("Invalid or missing 'sub' claim in JWT")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+		c.Abort()
+		return
+	}
+
 		
 		// Fetch user from database
 		dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

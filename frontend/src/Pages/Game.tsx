@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import PlayerCard from "../components/PlayerCard";
 import UserCamera from "../components/UserCamera";
@@ -32,73 +32,98 @@ const Game: React.FC = () => {
 
   const websocketRef = useRef<WebSocket | null>(null);
 
-  const handleWebSocketMessage = (message: any) => {
-    switch (message.type) {
-      case "DEBATE_START":
-        setState((prevState) => ({ ...prevState, loading: false }));
-        break;
-      case "DEBATE_END":
-        setState((prevState) => ({ ...prevState, gameEnded: true }));
-        break;
-      case "TURN_START": {
-        const { currentTurn, duration } = JSON.parse(message.content);
-        setState((prevState) => ({
-          ...prevState,
-          isTurn: currentTurn === userId,
-          turnDuration: duration,
-        }));
-        break;
-      }
-      case "TURN_END":
-        setState((prevState) => ({
-          ...prevState,
-          isTurn: false,
-          turnDuration: 0,
-        }));
-        break;
-      case "CHAT_MESSAGE": {
-        const { sender, message: chatMessage } = JSON.parse(message.content);
-        const newMessage: ChatMessage = {
-          isUser: sender === userId,
-          text: chatMessage,
-        };
-        setState((prevState) => ({
-          ...prevState,
-          messages: [...prevState.messages, newMessage],
-          transcriptStatus: { ...prevState.transcriptStatus, loading: false },
-        }));
-        break;
-      }
-      case "GENERATING_TRANSCRIPT": {
-        const { sender } = JSON.parse(message.content);
-        setState((prevState) => ({
-          ...prevState,
-          transcriptStatus: { loading: true, isUser: sender === userId }, //transcript is getting generated
-        }));
-        break;
-      }
-
-      case "GAME_RESULT": {
-        console.log(message);
-        const { winnerUserId, points, totalPoints, evaluationMessage } =
-          JSON.parse(message.content);
-        setState((prevState) => ({
-          ...prevState,
-          gameResult: {
-            isReady: true,
-            isWinner: winnerUserId == userId,
-            points: points,
-            totalPoints: totalPoints,
-            evaluationMessage: evaluationMessage,
-          },
-        }));
-        break;
-      }
-
-      default:
-        console.warn("Unhandled message type:", message.type);
-    }
+  type GameWebSocketMessage = {
+    type: string;
+    content?: string;
+    [key: string]: unknown;
   };
+
+  const handleWebSocketMessage = useCallback(
+    (message: GameWebSocketMessage) => {
+      switch (message.type) {
+        case "DEBATE_START":
+          setState((prevState) => ({ ...prevState, loading: false }));
+          break;
+        case "DEBATE_END":
+          setState((prevState) => ({ ...prevState, gameEnded: true }));
+          break;
+        case "TURN_START": {
+          if (!message.content) {
+            console.warn("TURN_START received without content");
+            break;
+          }
+          const { currentTurn, duration } = JSON.parse(message.content);
+          setState((prevState) => ({
+            ...prevState,
+            isTurn: currentTurn === userId,
+            turnDuration: duration,
+          }));
+          break;
+        }
+        case "TURN_END":
+          setState((prevState) => ({
+            ...prevState,
+            isTurn: false,
+            turnDuration: 0,
+          }));
+          break;
+        case "CHAT_MESSAGE": {
+          if (!message.content) {
+            console.warn("CHAT_MESSAGE received without content");
+            break;
+          }
+          const { sender, message: chatMessage } = JSON.parse(message.content);
+          const newMessage: ChatMessage = {
+            isUser: sender === userId,
+            text: chatMessage,
+          };
+          setState((prevState) => ({
+            ...prevState,
+            messages: [...prevState.messages, newMessage],
+            transcriptStatus: { ...prevState.transcriptStatus, loading: false },
+          }));
+          break;
+        }
+        case "GENERATING_TRANSCRIPT": {
+          if (!message.content) {
+            console.warn("GENERATING_TRANSCRIPT received without content");
+            break;
+          }
+          const { sender } = JSON.parse(message.content);
+          setState((prevState) => ({
+            ...prevState,
+            transcriptStatus: { loading: true, isUser: sender === userId }, //transcript is getting generated
+          }));
+          break;
+        }
+
+        case "GAME_RESULT": {
+          console.log(message);
+          if (!message.content) {
+            console.warn("GAME_RESULT received without content");
+            break;
+          }
+          const { winnerUserId, points, totalPoints, evaluationMessage } =
+            JSON.parse(message.content);
+          setState((prevState) => ({
+            ...prevState,
+            gameResult: {
+              isReady: true,
+              isWinner: winnerUserId === userId,
+              points: points,
+              totalPoints: totalPoints,
+              evaluationMessage: evaluationMessage,
+            },
+          }));
+          break;
+        }
+
+        default:
+          console.warn("Unhandled message type:", message.type);
+      }
+    },
+    [userId]
+  );
 
   useEffect(() => {
     const wsURL = `${import.meta.env.VITE_BASE_URL}/ws?userId=${userId}`;
@@ -112,7 +137,7 @@ const Game: React.FC = () => {
     ws.onclose = () => console.log("WebSocket connection closed");
 
     return () => ws.close();
-  }, [userId]);
+  }, [userId, handleWebSocketMessage]);
 
   const renderGameContent = () => (
     <div className="w-screen h-screen flex justify-center items-center">
@@ -186,12 +211,59 @@ const Game: React.FC = () => {
         <Chatbox
           messages={state.messages}
           transcriptStatus={state.transcriptStatus}
-          onSendMessage={() => {}}
-          onTypingChange={() => {}}
-          onSpeakingChange={() => {}}
+          onSendMessage={(message) => {
+            if (!message.trim()) return;
+            const payload = {
+              type: "CHAT_MESSAGE",
+              content: message,
+              timestamp: Date.now(),
+            };
+
+            if (
+              websocketRef.current &&
+              websocketRef.current.readyState === WebSocket.OPEN
+            ) {
+              websocketRef.current.send(JSON.stringify(payload));
+            }
+
+            setState((prev) => ({
+              ...prev,
+              messages: [...prev.messages, { isUser: true, text: message }],
+            }));
+          }}
+          onTypingChange={(isTyping) => {
+            if (
+              !websocketRef.current ||
+              websocketRef.current.readyState !== WebSocket.OPEN
+            ) {
+              return;
+            }
+
+            websocketRef.current.send(
+              JSON.stringify({
+                type: isTyping ? "TYPING_START" : "TYPING_STOP",
+                timestamp: Date.now(),
+              })
+            );
+          }}
+          onSpeakingChange={(isSpeaking) => {
+            if (
+              !websocketRef.current ||
+              websocketRef.current.readyState !== WebSocket.OPEN
+            ) {
+              return;
+            }
+
+            websocketRef.current.send(
+              JSON.stringify({
+                type: isSpeaking ? "SPEAKING_START" : "SPEAKING_STOP",
+                timestamp: Date.now(),
+              })
+            );
+          }}
           typingIndicators={[]}
-          isMyTurn={true}
-          disabled={true}
+          isMyTurn={state.isTurn}
+          disabled={!(state.isTurn && !state.gameEnded)}
         />
       </div>
     </div>

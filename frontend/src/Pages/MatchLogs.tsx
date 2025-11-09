@@ -112,11 +112,11 @@ const MatchLogs: React.FC = () => {
       const [score1, score2] = log.score.total.split("-").map(Number);
       if (score1 > score2) winner = player1.split(": ")[1];
       else if (score2 > score1) winner = player2;
-      else
-        winner =
-          stage === ("First Round Match 3" as any)
-            ? "Ayaan Khanna (Tiebreaker)"
-            : "";
+      else {
+        winner = log.match.includes("First Round Match 3")
+          ? "Ayaan Khanna (Tiebreaker)"
+          : "";
+      }
     }
     return {
       player1: player1.split(": ")[1] || player1,

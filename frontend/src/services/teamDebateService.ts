@@ -27,6 +27,13 @@ export interface TeamDebate {
   updatedAt: string;
 }
 
+export interface ActiveDebateSummary {
+  hasActiveDebate: boolean;
+  debateId?: string;
+  topic?: string;
+  status?: string;
+}
+
 // Create a team debate
 export const createTeamDebate = async (
   team1Id: string,
@@ -68,7 +75,9 @@ export const getTeamDebate = async (debateId: string): Promise<TeamDebate> => {
 };
 
 // Get active debate for a team
-export const getActiveTeamDebate = async (teamId: string): Promise<TeamDebate> => {
+export const getActiveTeamDebate = async (
+  teamId: string
+): Promise<ActiveDebateSummary> => {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE_URL}/team-debates/team/${teamId}/active`, {
     headers: {

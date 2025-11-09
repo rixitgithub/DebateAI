@@ -827,7 +827,7 @@ const TeamBuilder: React.FC = () => {
             <div className="space-y-4">
               {availableTeams.map((team) => {
                 const memberCount = team.members?.length || 0;
-                const capacity = 4;
+                const capacity = team.maxSize || 4;
                 const isFull = memberCount >= capacity;
 
                 return (
@@ -881,10 +881,10 @@ const TeamBuilder: React.FC = () => {
 
                         <div className="text-right">
                           <div className="text-sm text-muted-foreground mb-1">
-                            Members ({team.maxSize || capacity})
+                            Members ({capacity})
                           </div>
                           <div className="text-2xl font-bold text-primary">
-                            {memberCount}/{team.maxSize || capacity}
+                            {memberCount}/{capacity}
                           </div>
                         </div>
                       </div>
