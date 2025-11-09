@@ -441,7 +441,7 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 
 	// Check for FirstWin badge (first win against bot)
 	if resultStatus == "win" && !hasBadge["FirstWin"] {
-		badgeUpdate := bson.M{"$push": bson.M{"badges": "FirstWin"}}
+		badgeUpdate := bson.M{"$addToSet": bson.M{"badges": "FirstWin"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, badgeUpdate)
 		
 		// Update the updatedUser object to include the new badge
@@ -499,7 +499,7 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 
 	// Check for Novice badge (first debate completed)
 	if user.Score >= 10 && !hasBadge["Novice"] {
-		update := bson.M{"$push": bson.M{"badges": "Novice"}}
+		update := bson.M{"$addToSet": bson.M{"badges": "Novice"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, update)
 
 		websocket.BroadcastGamificationEvent(models.GamificationEvent{
@@ -512,7 +512,7 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 
 	// Check for Streak5 badge (5 day streak)
 	if user.CurrentStreak >= 5 && !hasBadge["Streak5"] {
-		update := bson.M{"$push": bson.M{"badges": "Streak5"}}
+		update := bson.M{"$addToSet": bson.M{"badges": "Streak5"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, update)
 
 		websocket.BroadcastGamificationEvent(models.GamificationEvent{
@@ -525,7 +525,7 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 
 	// Check for FactMaster badge (high score threshold)
 	if user.Score >= 500 && !hasBadge["FactMaster"] {
-		update := bson.M{"$push": bson.M{"badges": "FactMaster"}}
+		update := bson.M{"$addToSet": bson.M{"badges": "FactMaster"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, update)
 
 		websocket.BroadcastGamificationEvent(models.GamificationEvent{

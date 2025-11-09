@@ -96,7 +96,10 @@ export const createGamificationWebSocket = (
   onError?: (error: Event) => void,
   onClose?: () => void
 ): WebSocket => {
-  const wsURL = `ws://localhost:1313/ws/gamification?token=${encodeURIComponent(token)}`;
+  const target = new URL("/ws/gamification", baseURL);
+  target.protocol = target.protocol === "https:" ? "wss:" : "ws:";
+  target.searchParams.set("token", token);
+  const wsURL = target.toString();
   const ws = new WebSocket(wsURL);
 
   ws.onopen = () => {

@@ -1,5 +1,15 @@
 // Team debate service for API calls
-const API_BASE_URL = "http://localhost:1313";
+const API_BASE_URL =
+  (import.meta.env.VITE_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
+  window.location.origin;
+
+interface TeamDebateMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  elo: number;
+}
 
 function getAuthToken(): string {
   return localStorage.getItem("token") || "";
@@ -11,8 +21,8 @@ export interface TeamDebate {
   team2Id: string;
   team1Name: string;
   team2Name: string;
-  team1Members: any[];
-  team2Members: any[];
+  team1Members: TeamDebateMember[];
+  team2Members: TeamDebateMember[];
   topic: string;
   team1Stance: string;
   team2Stance: string;
@@ -114,7 +124,7 @@ export const leaveMatchmaking = async (teamId: string): Promise<void> => {
   }
 };
 
-export const getMatchmakingPool = async (): Promise<any> => {
+export const getMatchmakingPool = async (): Promise<unknown> => {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE_URL}/matchmaking/pool`, {
     headers: {
@@ -129,7 +139,7 @@ export const getMatchmakingPool = async (): Promise<any> => {
   return response.json();
 };
 
-export const getMatchmakingStatus = async (teamId: string): Promise<any> => {
+export const getMatchmakingStatus = async (teamId: string): Promise<unknown> => {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE_URL}/matchmaking/${teamId}/status`, {
     headers: {
