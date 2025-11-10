@@ -2,10 +2,11 @@ package controllers
 
 import (
 	"arguehub/db"
-	"arguehub/models"
 	"arguehub/middlewares"
+	"arguehub/models"
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -53,7 +54,7 @@ func AdminSignup(ctx *gin.Context) {
 	// Check if admin already exists
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	var existingAdmin models.Admin
 	err := db.MongoDatabase.Collection("admins").FindOne(dbCtx, bson.M{"email": request.Email}).Decode(&existingAdmin)
 	if err == nil {
@@ -125,7 +126,7 @@ func AdminLogin(ctx *gin.Context) {
 	// Find admin in MongoDB
 	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	var admin models.Admin
 	err := db.MongoDatabase.Collection("admins").FindOne(dbCtx, bson.M{"email": request.Email}).Decode(&admin)
 	if err != nil {
@@ -167,7 +168,7 @@ func AdminLogin(ctx *gin.Context) {
 func GetDebates(ctx *gin.Context) {
 	page := 1
 	limit := 20
-	
+
 	if pageStr := ctx.Query("page"); pageStr != "" {
 		fmt.Sscanf(pageStr, "%d", &page)
 	}
@@ -182,7 +183,7 @@ func GetDebates(ctx *gin.Context) {
 
 	// Get debates from debates collection
 	collection := db.MongoDatabase.Collection("debates")
-	
+
 	opts := options.Find().SetSkip(int64(skip)).SetLimit(int64(limit)).SetSort(bson.M{"date": -1})
 	cursor, err := collection.Find(dbCtx, bson.M{}, opts)
 	if err != nil {
@@ -195,6 +196,16 @@ func GetDebates(ctx *gin.Context) {
 	if err := cursor.All(dbCtx, &debates); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode debates", "message": err.Error()})
 		return
+	}
+
+	// Sanitize any NaN or Inf values to avoid JSON encoding errors
+	for i := range debates {
+		debates[i].PreRating = sanitizeFloat64(debates[i].PreRating)
+		debates[i].PreRD = sanitizeFloat64(debates[i].PreRD)
+		debates[i].PostRating = sanitizeFloat64(debates[i].PostRating)
+		debates[i].PostRD = sanitizeFloat64(debates[i].PostRD)
+		debates[i].RatingChange = sanitizeFloat64(debates[i].RatingChange)
+		debates[i].RDChange = sanitizeFloat64(debates[i].RDChange)
 	}
 
 	// Get total count
@@ -220,6 +231,13 @@ func GetDebates(ctx *gin.Context) {
 		"page":    page,
 		"limit":   limit,
 	})
+}
+
+func sanitizeFloat64(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0
+	}
+	return value
 }
 
 // DeleteDebate deletes a debate (admin only)
@@ -303,7 +321,7 @@ func BulkDeleteDebates(ctx *gin.Context) {
 	// Log the action
 	for _, objID := range objIDs {
 		middlewares.LogAdminAction(ctx, "bulk_delete_debate", "debate", objID, map[string]interface{}{
-			"debateId": objID.Hex(),
+			"debateId":  objID.Hex(),
 			"bulkCount": len(objIDs),
 		})
 	}
@@ -318,7 +336,7 @@ func BulkDeleteDebates(ctx *gin.Context) {
 func GetComments(ctx *gin.Context) {
 	page := 1
 	limit := 20
-	
+
 	if pageStr := ctx.Query("page"); pageStr != "" {
 		fmt.Sscanf(pageStr, "%d", &page)
 	}
@@ -492,4 +510,3 @@ func BulkDeleteComments(ctx *gin.Context) {
 		"deletedCount": result.DeletedCount,
 	})
 }
-

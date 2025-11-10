@@ -16,6 +16,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+const (
+	analyticsHistoryRequestTimeout = 45 * time.Second
+	analyticsHistoryQueryTimeout   = 5 * time.Second
+)
+
+func countDocumentsWithTimeout(collection *mongo.Collection, filter interface{}) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), analyticsHistoryQueryTimeout)
+	defer cancel()
+	return collection.CountDocuments(ctx, filter)
+}
+
 // GetAnalytics returns current analytics snapshot
 func GetAnalytics(ctx *gin.Context) {
 	dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -155,14 +166,14 @@ func GetAnalyticsHistory(ctx *gin.Context) {
 		}
 	}
 
-	dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	dbCtx, cancel := context.WithTimeout(context.Background(), analyticsHistoryRequestTimeout)
 	defer cancel()
 
 	now := time.Now()
 	startDate := now.AddDate(0, 0, -days)
 
 	snapshotsCollection := db.MongoDatabase.Collection("analytics_snapshots")
-	
+
 	opts := options.Find().SetSort(bson.M{"timestamp": 1})
 	cursor, err := snapshotsCollection.Find(dbCtx, bson.M{
 		"timestamp": bson.M{"$gte": startDate},
@@ -200,52 +211,68 @@ func GetAnalyticsHistory(ctx *gin.Context) {
 			// Use existing snapshot
 			snapshot = existingSnapshot
 		} else {
-			// Generate snapshot from actual data for this day
-			// Count debates for this day (including bot debates)
 			debatesCollection := db.MongoDatabase.Collection("debates")
-			debatesCount, err := debatesCollection.CountDocuments(dbCtx, bson.M{
+			debatesCount, err := countDocumentsWithTimeout(debatesCollection, bson.M{
 				"date": bson.M{"$gte": dateStart, "$lt": dateEnd},
 			})
 			if err != nil {
 				log.Printf("Error counting debates for %s: %v", dayKey, err)
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute debates history", "message": err.Error()})
+				return
 			}
-			
+
 			botDebatesCollection := db.MongoDatabase.Collection("debates_vs_bot")
 			// Bot debates use createdAt (int64 Unix timestamp) instead of date
 			dateStartUnix := dateStart.Unix()
 			dateEndUnix := dateEnd.Unix()
-			botDebatesCount, err := botDebatesCollection.CountDocuments(dbCtx, bson.M{
+			botDebatesCount, err := countDocumentsWithTimeout(botDebatesCollection, bson.M{
 				"createdAt": bson.M{"$gte": dateStartUnix, "$lt": dateEndUnix},
 			})
 			if err != nil {
 				log.Printf("Error counting bot debates for %s: %v", dayKey, err)
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute bot debates history", "message": err.Error()})
+				return
 			}
-			debatesCount += botDebatesCount
-			
-			log.Printf("Generated snapshot for %s: %d debates (%d regular + %d bot)", dayKey, debatesCount, debatesCount-botDebatesCount, botDebatesCount)
+			totalDebates := debatesCount + botDebatesCount
 
-			// Count comments for this day
+			log.Printf("Generated snapshot for %s: %d debates (%d regular + %d bot)", dayKey, totalDebates, debatesCount, botDebatesCount)
+
 			teamDebateMessagesCollection := db.MongoDatabase.Collection("team_debate_messages")
-			commentsCount, _ := teamDebateMessagesCollection.CountDocuments(dbCtx, bson.M{
+			commentsCount, err := countDocumentsWithTimeout(teamDebateMessagesCollection, bson.M{
 				"timestamp": bson.M{"$gte": dateStart, "$lt": dateEnd},
 			})
-			
+			if err != nil {
+				log.Printf("Error counting team debate messages for %s: %v", dayKey, err)
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute comments history", "message": err.Error()})
+				return
+			}
+
 			teamChatMessagesCollection := db.MongoDatabase.Collection("team_chat_messages")
-			chatCommentsCount, _ := teamChatMessagesCollection.CountDocuments(dbCtx, bson.M{
+			chatCommentsCount, err := countDocumentsWithTimeout(teamChatMessagesCollection, bson.M{
 				"timestamp": bson.M{"$gte": dateStart, "$lt": dateEnd},
 			})
+			if err != nil {
+				log.Printf("Error counting team chat messages for %s: %v", dayKey, err)
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute chat history", "message": err.Error()})
+				return
+			}
 			commentsCount += chatCommentsCount
 
 			// Count new users for this day
 			usersCollection := db.MongoDatabase.Collection("users")
-			newUsersCount, _ := usersCollection.CountDocuments(dbCtx, bson.M{
+			newUsersCount, err := countDocumentsWithTimeout(usersCollection, bson.M{
 				"createdAt": bson.M{"$gte": dateStart, "$lt": dateEnd},
 			})
+			if err != nil {
+				log.Printf("Error counting new users for %s: %v", dayKey, err)
+				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to compute user history", "message": err.Error()})
+				return
+			}
 
 			snapshot = models.AnalyticsSnapshot{
 				ID:            primitive.NewObjectID(),
 				Timestamp:     dateStart,
-				DebatesToday:  debatesCount,
+				DebatesToday:  totalDebates,
 				CommentsToday: commentsCount,
 				NewUsersToday: newUsersCount,
 			}
@@ -312,4 +339,3 @@ func GetAdminActionLogs(ctx *gin.Context) {
 		"limit": limit,
 	})
 }
-
