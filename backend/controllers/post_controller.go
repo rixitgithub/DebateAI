@@ -19,6 +19,17 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+type transcriptPreview struct {
+	Messages    []models.Message  `json:"messages"`
+	Transcripts map[string]string `json:"transcripts,omitempty"`
+}
+
+type postWithTranscript struct {
+	models.DebatePost `json:",inline"`
+	Transcript        *transcriptPreview `json:"transcript,omitempty"`
+	IsOwnPost         bool               `json:"isOwnPost,omitempty"`
+}
+
 // CreatePostHandler creates a new post from a saved transcript
 func CreatePostHandler(c *gin.Context) {
 	token := c.GetHeader("Authorization")
@@ -136,6 +147,20 @@ func GetFeedHandler(c *gin.Context) {
 
 	skip := (page - 1) * limit
 
+	var currentUserID primitive.ObjectID
+	hasCurrentUser := false
+	token := c.GetHeader("Authorization")
+	if token != "" {
+		token = strings.TrimPrefix(token, "Bearer ")
+		valid, email, err := utils.ValidateTokenAndFetchEmail("./config/config.prod.yml", token, c)
+		if err == nil && valid {
+			if userID, err := utils.GetUserIDFromEmail(email); err == nil {
+				currentUserID = userID
+				hasCurrentUser = true
+			}
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -171,9 +196,53 @@ func GetFeedHandler(c *gin.Context) {
 		return
 	}
 
+	transcriptCollection := db.MongoDatabase.Collection("saved_debate_transcripts")
+	transcriptCache := make(map[primitive.ObjectID]*models.SavedDebateTranscript)
+
+	postResponses := make([]postWithTranscript, 0, len(posts))
+	for _, post := range posts {
+		response := postWithTranscript{
+			DebatePost: post,
+			IsOwnPost:  hasCurrentUser && post.UserID == currentUserID,
+		}
+
+		if cached, ok := transcriptCache[post.TranscriptID]; ok {
+			if cached != nil {
+				response.Transcript = &transcriptPreview{
+					Messages:    cached.Messages,
+					Transcripts: cached.Transcripts,
+				}
+			}
+		} else {
+			log.Printf("Fetching transcript %s for post %s", post.TranscriptID.Hex(), post.ID.Hex())
+			var transcript models.SavedDebateTranscript
+			err := transcriptCollection.FindOne(ctx, bson.M{"_id": post.TranscriptID}).Decode(&transcript)
+			if err != nil {
+				if err == mongo.ErrNoDocuments {
+					log.Printf("Transcript %s not found for post %s", post.TranscriptID.Hex(), post.ID.Hex())
+				} else {
+					log.Printf("Failed to fetch transcript %s for post %s: %v", post.TranscriptID.Hex(), post.ID.Hex(), err)
+				}
+				transcriptCache[post.TranscriptID] = nil
+			} else {
+				log.Printf("Loaded transcript %s for post %s: messages=%d transcripts=%d",
+					transcript.ID.Hex(),
+					post.ID.Hex(),
+					len(transcript.Messages),
+					len(transcript.Transcripts))
+				transcriptCache[post.TranscriptID] = &transcript
+				response.Transcript = &transcriptPreview{
+					Messages:    transcript.Messages,
+					Transcripts: transcript.Transcripts,
+				}
+			}
+		}
+		postResponses = append(postResponses, response)
+	}
+
 	log.Printf("Fetched %d posts for feed (page %d, limit %d)", len(posts), page, limit)
 	c.JSON(http.StatusOK, gin.H{
-		"posts": posts,
+		"posts": postResponses,
 		"total": total,
 		"page":  page,
 		"limit": limit,
@@ -235,7 +304,18 @@ func DeletePostHandler(c *gin.Context) {
 	defer cancel()
 
 	postCollection := db.MongoDatabase.Collection("debate_posts")
-	result, err := postCollection.DeleteOne(ctx, bson.M{"_id": postObjectID, "userId": userID})
+	var post models.DebatePost
+	err = postCollection.FindOne(ctx, bson.M{"_id": postObjectID, "userId": userID}).Decode(&post)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Post not found or you don't have permission"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch post"})
+		return
+	}
+
+	result, err := postCollection.DeleteOne(ctx, bson.M{"_id": postObjectID})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete post"})
 		return
@@ -243,6 +323,14 @@ func DeletePostHandler(c *gin.Context) {
 
 	if result.DeletedCount == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Post not found or you don't have permission"})
+		return
+	}
+
+	// Delete related comments tied to the post's transcript
+	commentsCollection := db.MongoDatabase.Collection("comments")
+	if _, err := commentsCollection.DeleteMany(ctx, bson.M{"transcriptId": post.TranscriptID}); err != nil {
+		log.Printf("Failed to delete comments for transcript %s: %v", post.TranscriptID.Hex(), err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Post deleted, but failed to delete associated comments"})
 		return
 	}
 
