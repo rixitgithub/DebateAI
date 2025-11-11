@@ -107,14 +107,27 @@ const MatchLogs: React.FC = () => {
       : log.match.includes("Semifinal")
       ? "Semifinal"
       : "Final";
+    const isFirstRoundMatch3 = log.match.startsWith(
+      "First Round Match 3: Ayaan Khanna vs Vivaan Sharma"
+    );
     let winner = "";
     if (log.score && log.score.total) {
       const [score1, score2] = log.score.total.split("-").map(Number);
       if (score1 > score2) winner = player1.split(": ")[1];
       else if (score2 > score1) winner = player2;
-      else winner = stage === "First Round Match 3" ? "Ayaan Khanna (Tiebreaker)" : "";
+      else
+        winner =
+          log.match === "First Round Match 3: Ayaan Khanna vs Vivaan Sharma"
+            ? "Ayaan Khanna (Tiebreaker)"
+            : "";
     }
-    return { player1: player1.split(": ")[1] || player1, player2, stage, winner };
+    return {
+      player1: player1.split(": ")[1] || player1,
+      player2,
+      stage,
+      winner,
+      isFirstRoundMatch3,
+    };
   };
 
   return (
@@ -122,9 +135,13 @@ const MatchLogs: React.FC = () => {
       <h2 className="text-2xl font-bold text-foreground mb-6">Match Logs</h2>
       <div className="space-y-6 max-h-[calc(100vh-250px)] overflow-y-auto scrollbar-hide">
         {[...logs].reverse().map((log, index) => {
-          const { player1, player2, stage, winner } = getMatchDetails(log);
+          const { player1, player2, stage, winner, isFirstRoundMatch3 } =
+            getMatchDetails(log);
           return (
-            <div key={index} className="bg-card border border-border rounded-lg shadow-sm p-5 hover:shadow-md transition-all duration-300">
+            <div
+              key={index}
+              className="bg-card border border-border rounded-lg shadow-sm p-5 hover:shadow-md transition-all duration-300"
+            >
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span
@@ -143,7 +160,9 @@ const MatchLogs: React.FC = () => {
                   <h3 className="text-xl font-bold text-foreground">
                     {player1} vs {player2}
                   </h3>
-                  <span className="text-sm text-muted-foreground">{log.timestamp}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {log.timestamp}
+                  </span>
                 </div>
               </div>
               <div className="h-px bg-border mb-4" />
@@ -157,29 +176,55 @@ const MatchLogs: React.FC = () => {
                     const [score1, score2] = value.split("-");
                     return (
                       <React.Fragment key={key}>
-                        <span className="capitalize text-muted-foreground">{key}</span>
-                        <span className={parseInt(score1) > parseInt(score2) ? "text-primary font-medium" : ""}>{score1}</span>
-                        <span className={parseInt(score2) > parseInt(score1) ? "text-primary font-medium" : ""}>{score2}</span>
+                        <span className="capitalize text-muted-foreground">
+                          {key}
+                        </span>
+                        <span
+                          className={
+                            parseInt(score1) > parseInt(score2)
+                              ? "text-primary font-medium"
+                              : ""
+                          }
+                        >
+                          {score1}
+                        </span>
+                        <span
+                          className={
+                            parseInt(score2) > parseInt(score1)
+                              ? "text-primary font-medium"
+                              : ""
+                          }
+                        >
+                          {score2}
+                        </span>
                       </React.Fragment>
                     );
                   })}
                   <span className="font-semibold">Total</span>
                   <span
                     className={`font-semibold ${
-                      log.score && parseInt(log.score.total.split("-")[0]) > parseInt(log.score.total.split("-")[1]) ? "text-primary" : ""
+                      log.score &&
+                      parseInt(log.score.total.split("-")[0]) >
+                        parseInt(log.score.total.split("-")[1])
+                        ? "text-primary"
+                        : ""
                     }`}
                   >
                     {log.score?.total.split("-")[0]}
                   </span>
                   <span
                     className={`font-semibold ${
-                      log.score && parseInt(log.score.total.split("-")[1]) > parseInt(log.score.total.split("-")[0]) ? "text-primary" : ""
+                      log.score &&
+                      parseInt(log.score.total.split("-")[1]) >
+                        parseInt(log.score.total.split("-")[0])
+                        ? "text-primary"
+                        : ""
                     }`}
                   >
                     {log.score?.total.split("-")[1]}
                   </span>
                 </div>
-                {stage === "First Round Match 3" && (
+                {isFirstRoundMatch3 && (
                   <p className="text-xs text-muted-foreground mt-2">
                     * Ayaan Khanna advanced via tiebreaker
                   </p>
@@ -190,7 +235,9 @@ const MatchLogs: React.FC = () => {
                   {winner && (
                     <>
                       <span className="text-yellow-500">🏆</span>
-                      <span className="font-medium text-foreground">Winner: {winner}</span>
+                      <span className="font-medium text-foreground">
+                        Winner: {winner}
+                      </span>
                     </>
                   )}
                 </div>

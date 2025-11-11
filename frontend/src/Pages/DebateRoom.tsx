@@ -208,7 +208,6 @@ const DebateRoom: React.FC = () => {
   const phases = debateData.phaseTimings;
   const debateKey = `debate_${debateData.userId}_${debateData.topic}_${debateData.debateId}`;
   const [user] = useAtom(userAtom);
-  console.log("user", user);
 
   const [state, setState] = useState<DebateState>(() => {
     const savedState = localStorage.getItem(debateKey);
@@ -250,39 +249,44 @@ const DebateRoom: React.FC = () => {
     if ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) {
       const SpeechRecognition =
         window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = "en-US";
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = "en-US";
 
-      recognitionRef.current.onresult = (event) => {
-        let newFinalTranscript = "";
-        let newInterimTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            newFinalTranscript += result[0].transcript + " ";
-          } else {
-            newInterimTranscript = result[0].transcript;
+        recognitionRef.current.onresult = (event) => {
+          let newFinalTranscript = "";
+          let newInterimTranscript = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const result = event.results[i];
+            if (result.isFinal) {
+              newFinalTranscript += result[0].transcript + " ";
+            } else {
+              newInterimTranscript = result[0].transcript;
+            }
           }
-        }
-        if (newFinalTranscript) {
-          setFinalInput((prev) =>
-            prev
-              ? prev + " " + newFinalTranscript.trim()
-              : newFinalTranscript.trim()
-          );
-          setInterimInput("");
-        } else {
-          setInterimInput(newInterimTranscript);
-        }
-      };
+          if (newFinalTranscript) {
+            setFinalInput((prev) =>
+              prev
+                ? prev + " " + newFinalTranscript.trim()
+                : newFinalTranscript.trim()
+            );
+            setInterimInput("");
+          } else {
+            setInterimInput(newInterimTranscript);
+          }
+        };
 
-      recognitionRef.current.onend = () => setIsRecognizing(false);
-      recognitionRef.current.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-        setIsRecognizing(false);
-      };
+        recognitionRef.current.onend = () => setIsRecognizing(false);
+        recognitionRef.current.onerror = (event: Event) => {
+          console.log(
+            "Speech recognition error:",
+            (event as ErrorEvent).error || event
+          );
+          setIsRecognizing(false);
+        };
+      }
     }
 
     return () => {
@@ -507,7 +511,6 @@ const DebateRoom: React.FC = () => {
 
       setNextTurnPending(true);
     } catch (error) {
-      console.error("Bot error:", error);
       setNextTurnPending(true);
     } finally {
       botTurnRef.current = false;
@@ -526,7 +529,6 @@ const DebateRoom: React.FC = () => {
       setPopup({ show: false, message: "" });
       setShowJudgment(true);
     } catch (error) {
-      console.error("Judging error:", error);
       setJudgmentData({
         opening_statement: {
           user: { score: 0, reason: "Error" },

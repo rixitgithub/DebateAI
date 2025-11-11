@@ -20,30 +20,40 @@ export const useUser = () => {
           
           if (response.ok) {
             const userData = await response.json();
+            const profile =
+              (userData.profile && typeof userData.profile === 'object'
+                ? userData.profile
+                : userData) ?? {};
             setUser({
-              id: userData.id,
-              email: userData.email,
-              displayName: userData.displayName || 'User',
-              bio: userData.bio || '',
-              rating: userData.rating || 1500,
-              rd: userData.rd || 350,
-              volatility: userData.volatility || 0.06,
-              lastRatingUpdate: userData.lastRatingUpdate || new Date().toISOString(),
-              avatarUrl: userData.avatarUrl || 'https://avatar.iran.liara.run/public/10',
-              twitter: userData.twitter,
-              instagram: userData.instagram,
-              linkedin: userData.linkedin,
+              id: profile.id || userData.id,
+              email: profile.email || userData.email,
+              displayName: profile.displayName || userData.displayName || 'User',
+              bio: profile.bio || userData.bio || '',
+              rating: profile.rating || userData.rating || 1500,
+              rd: profile.rd || userData.rd || 350,
+              volatility: profile.volatility || userData.volatility || 0.06,
+              lastRatingUpdate:
+                profile.lastRatingUpdate ||
+                userData.lastRatingUpdate ||
+                new Date().toISOString(),
+              avatarUrl:
+                profile.avatarUrl ||
+                userData.avatarUrl ||
+                'https://avatar.iran.liara.run/public/10',
+              twitter: profile.twitter || userData.twitter,
+              instagram: profile.instagram || userData.instagram,
+              linkedin: profile.linkedin || userData.linkedin,
               password: '',
-              nickname: userData.nickname || 'User',
-              isVerified: userData.isVerified || false,
-              verificationCode: userData.verificationCode,
-              resetPasswordCode: userData.resetPasswordCode,
-              createdAt: userData.createdAt || new Date().toISOString(),
-              updatedAt: userData.updatedAt || new Date().toISOString(),
+              nickname: profile.nickname || userData.nickname || 'User',
+              isVerified: profile.isVerified || userData.isVerified || false,
+              verificationCode: profile.verificationCode || userData.verificationCode,
+              resetPasswordCode:
+                profile.resetPasswordCode || userData.resetPasswordCode,
+              createdAt: profile.createdAt || userData.createdAt || new Date().toISOString(),
+              updatedAt: profile.updatedAt || userData.updatedAt || new Date().toISOString(),
             });
           }
         } catch (error) {
-          console.error('Failed to fetch user data:', error);
         }
       }
     };
