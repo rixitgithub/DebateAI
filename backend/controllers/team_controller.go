@@ -37,7 +37,7 @@ func generateTeamCode() string {
 // GetTeamByCode retrieves a team by its unique code
 func GetTeamByCode(c *gin.Context) {
 	code := c.Param("code")
-	
+
 	collection := db.GetCollection("teams")
 	var team models.Team
 	err := collection.FindOne(context.Background(), bson.M{"code": strings.ToUpper(code)}).Decode(&team)
@@ -220,7 +220,7 @@ func CreateTeam(c *gin.Context) {
 	team.CaptainEmail = userEmail.(string)
 	team.CreatedAt = time.Now()
 	team.UpdatedAt = time.Now()
-	
+
 	// Set default maxSize if not provided (only 2 or 4)
 	if team.MaxSize == 0 {
 		team.MaxSize = 4 // Default to 4 members
@@ -599,13 +599,13 @@ func GetTeamMemberProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":       member.ID.Hex(),
-		"email":    member.Email,
+		"id":          member.ID.Hex(),
+		"email":       member.Email,
 		"displayName": member.DisplayName,
-		"avatarUrl": member.AvatarURL,
-		"rating":   member.Rating,
-		"rd":       member.RD,
-		"bio":      member.Bio,
+		"avatarUrl":   member.AvatarURL,
+		"rating":      member.Rating,
+		"rd":          member.RD,
+		"bio":         member.Bio,
 	})
 }
 
@@ -634,4 +634,3 @@ func GetAvailableTeams(c *gin.Context) {
 
 	c.JSON(http.StatusOK, teams)
 }
-

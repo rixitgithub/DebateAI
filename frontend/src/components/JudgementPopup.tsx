@@ -58,6 +58,13 @@ type JudgmentDataForAgainst = {
 // Union type for JudgmentData
 type JudgmentData = JudgmentDataUserBot | JudgmentDataForAgainst;
 
+type RatingSummary = {
+  for: { rating: number; change: number };
+  against: { rating: number; change: number };
+};
+
+type DebateSide = 'for' | 'against';
+
 type JudgmentPopupProps = {
   judgment: JudgmentData;
   userAvatar?: string;
@@ -68,6 +75,12 @@ type JudgmentPopupProps = {
   botDesc?: string;
   forRole?: string;
   againstRole?: string;
+  localRole?: DebateSide | null;
+  localDisplayName?: string | null;
+  localAvatarUrl?: string | null;
+  opponentDisplayName?: string | null;
+  opponentAvatarUrl?: string | null;
+  ratingSummary?: RatingSummary | null;
   onClose: () => void;
 };
 
@@ -100,9 +113,14 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
   botName,
   userStance,
   botStance,
-  botDesc,
   forRole,
   againstRole,
+  localRole = null,
+  localDisplayName,
+  localAvatarUrl,
+  opponentDisplayName,
+  opponentAvatarUrl,
+  ratingSummary,
   onClose,
 }) => {
   const navigate = useNavigate();
@@ -115,25 +133,64 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
     localStorage.getItem('opponentAvatar') ||
     'https://avatar.iran.liara.run/public/31';
 
-  const isUserBotFormat = 'user' in judgment.opening_statement;
-  const player1Name = isUserBotFormat ? userName : forRole || 'For Debater';
-  const player2Name = isUserBotFormat
-    ? botName || 'Bot'
-    : againstRole || 'Against Debater';
-  const player1Stance = isUserBotFormat ? userStance : 'For';
-  const player2Stance = isUserBotFormat ? botStance : 'Against';
+const isUserBotFormat = 'user' in judgment.opening_statement;
 
-  const player1Avatar = isUserBotFormat
-    ? userAvatar
-    : forRole === 'You'
-    ? localAvatar
-    : opponentAvatar;
-  const player2Avatar = isUserBotFormat
-    ? botAvatar
-    : againstRole === 'You'
-    ? localAvatar
-    : opponentAvatar;
-  const player2Desc = isUserBotFormat ? botDesc : 'Debater';
+const defaultForName = forRole || 'For Debater';
+const defaultAgainstName = againstRole || 'Against Debater';
+const resolvedLocalName = localDisplayName || userName;
+const resolvedOpponentName = opponentDisplayName || 'Opponent';
+const derivedLocalAvatar = localAvatarUrl || localAvatar;
+const derivedOpponentAvatar = opponentAvatarUrl || opponentAvatar;
+
+const resolvedForName = isUserBotFormat
+  ? defaultForName
+  : localRole === 'for'
+  ? resolvedLocalName
+  : localRole === 'against'
+  ? resolvedOpponentName
+  : defaultForName;
+
+const resolvedAgainstName = isUserBotFormat
+  ? defaultAgainstName
+  : localRole === 'against'
+  ? resolvedLocalName
+  : localRole === 'for'
+  ? resolvedOpponentName
+  : defaultAgainstName;
+
+const player1Name = isUserBotFormat ? userName : resolvedForName;
+const player2Name = isUserBotFormat ? botName || 'Bot' : resolvedAgainstName;
+const player1Stance = isUserBotFormat ? userStance : 'For';
+const player2Stance = isUserBotFormat ? botStance : 'Against';
+
+const resolvedForAvatar = isUserBotFormat
+  ? userAvatar
+  : localRole === 'for'
+  ? derivedLocalAvatar
+  : localRole === 'against'
+  ? derivedOpponentAvatar
+  : derivedLocalAvatar || derivedOpponentAvatar;
+
+const resolvedAgainstAvatar = isUserBotFormat
+  ? botAvatar
+  : localRole === 'against'
+  ? derivedLocalAvatar
+  : localRole === 'for'
+  ? derivedOpponentAvatar
+  : derivedOpponentAvatar || derivedLocalAvatar;
+
+const player1Avatar = resolvedForAvatar || localAvatar;
+const player2Avatar = resolvedAgainstAvatar || opponentAvatar;
+const player2Desc = isUserBotFormat ? botDesc : resolvedAgainstName || 'Debater';
+
+const formatChange = (value: number) =>
+  `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+const formatRating = (value: number) => value.toFixed(2);
+
+const player1RatingSummary =
+  !isUserBotFormat && ratingSummary ? ratingSummary.for : null;
+const player2RatingSummary =
+  !isUserBotFormat && ratingSummary ? ratingSummary.against : null;
 
   const handleGoHome = () => {
     navigate('/startdebate');
@@ -574,6 +631,57 @@ const JudgmentPopup: React.FC<JudgmentPopupProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Rating Summary */}
+        {!isUserBotFormat && player1RatingSummary && player2RatingSummary && (
+          <div className='mt-10 bg-white p-6 rounded-lg shadow-md border border-gray-200'>
+            <h3 className='text-2xl font-bold text-gray-800 text-center mb-6'>
+              Rating Impact
+            </h3>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+              <div className='p-4 bg-gray-50 rounded-lg border border-gray-200'>
+                <h4 className='text-lg font-semibold text-gray-700 mb-2'>
+                  {player1Name} ({player1Stance})
+                </h4>
+                <p className='text-sm text-gray-600'>
+                  New Rating:{' '}
+                  <span className='font-semibold text-gray-900'>
+                    {formatRating(player1RatingSummary.rating)}
+                  </span>
+                </p>
+                <p
+                  className={`text-sm font-semibold ${
+                    player1RatingSummary.change >= 0
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                  }`}
+                >
+                  Change: {formatChange(player1RatingSummary.change)}
+                </p>
+              </div>
+              <div className='p-4 bg-gray-50 rounded-lg border border-gray-200'>
+                <h4 className='text-lg font-semibold text-gray-700 mb-2'>
+                  {player2Name} ({player2Stance})
+                </h4>
+                <p className='text-sm text-gray-600'>
+                  New Rating:{' '}
+                  <span className='font-semibold text-gray-900'>
+                    {formatRating(player2RatingSummary.rating)}
+                  </span>
+                </p>
+                <p
+                  className={`text-sm font-semibold ${
+                    player2RatingSummary.change >= 0
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                  }`}
+                >
+                  Change: {formatChange(player2RatingSummary.change)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Verdict */}
         <div className='mt-10 bg-gradient-to-r from-orange-500 to-orange-600 p-6 rounded-lg shadow-md text-white text-center'>

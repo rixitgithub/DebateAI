@@ -54,7 +54,6 @@ func GetLeaderboard(c *gin.Context) {
 	findOptions := options.Find().SetSort(bson.D{{"rating", -1}})
 	cursor, err := collection.Find(c, bson.M{}, findOptions)
 	if err != nil {
-		log.Printf("Failed to fetch users: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard data"})
 		return
 	}
@@ -63,7 +62,6 @@ func GetLeaderboard(c *gin.Context) {
 	// Decode users into slice
 	var users []models.User
 	if err := cursor.All(c, &users); err != nil {
-		log.Printf("Failed to decode users: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode leaderboard data"})
 		return
 	}

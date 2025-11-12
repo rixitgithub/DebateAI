@@ -38,7 +38,6 @@ func extractNameFromEmail(email string) string {
 	return email
 }
 
-
 func GetProfile(c *gin.Context) {
 	email := c.GetString("email")
 	if email == "" {
@@ -69,9 +68,7 @@ func GetProfile(c *gin.Context) {
 			}},
 		)
 		if err != nil {
-			fmt.Printf("Failed to update user rating: %v", err)
 		} else {
-			fmt.Printf("Updated user %s rating from 0 to 1200", email)
 		}
 	}
 
@@ -157,13 +154,13 @@ func GetProfile(c *gin.Context) {
 		// Add to recent debates (last 10)
 		if len(recentDebates) < 10 {
 			recentDebates = append(recentDebates, gin.H{
-				"id":          transcript.ID.Hex(),
-				"topic":       transcript.Topic,
-				"result":      transcript.Result,
-				"opponent":    transcript.Opponent,
-				"debateType":  transcript.DebateType,
-				"date":        transcript.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-				"eloChange":   0, // TODO: Add actual Elo change tracking
+				"id":         transcript.ID.Hex(),
+				"topic":      transcript.Topic,
+				"result":     transcript.Result,
+				"opponent":   transcript.Opponent,
+				"debateType": transcript.DebateType,
+				"date":       transcript.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				"eloChange":  0, // TODO: Add actual Elo change tracking
 			})
 		}
 
@@ -193,15 +190,15 @@ func GetProfile(c *gin.Context) {
 			"id":          user.ID.Hex(),
 			"displayName": displayName,
 			"email":       user.Email,
-			"bio":         user.Bio,
-			"rating":   int(user.Rating),
-			"score":       user.Score,
-			"badges":      user.Badges,
+			"bio":           user.Bio,
+			"rating":        int(user.Rating),
+			"score":         user.Score,
+			"badges":        user.Badges,
 			"currentStreak": user.CurrentStreak,
-			"twitter":     user.Twitter,
-			"instagram":   user.Instagram,
-			"linkedin":    user.LinkedIn,
-			"avatarUrl":   avatar,
+			"twitter":       user.Twitter,
+			"instagram":     user.Instagram,
+			"linkedin":      user.LinkedIn,
+			"avatarUrl":     avatar,
 		},
 		"leaderboard": leaderboard,
 		"stats": gin.H{
@@ -295,7 +292,7 @@ func UpdateEloAfterDebate(ctx *gin.Context) {
 		"topic":     req.Topic,
 		"result":    "win",
 		"eloChange": winnerChange,
-		"rating": newWinnerElo,
+		"rating":    newWinnerElo,
 		"date":      now,
 	})
 	db.MongoDatabase.Collection("debates").InsertOne(dbCtx, bson.M{
@@ -303,7 +300,7 @@ func UpdateEloAfterDebate(ctx *gin.Context) {
 		"topic":     req.Topic,
 		"result":    "loss",
 		"eloChange": loserChange,
-		"rating": newLoserElo,
+		"rating":    newLoserElo,
 		"date":      now,
 	})
 
