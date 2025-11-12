@@ -44,6 +44,46 @@ const Game: React.FC = () => {
     }
   }, []);
 
+  const upsertIndicator = (
+    indicators: TypingIndicator[],
+    update: {
+      userId: string;
+      username?: string;
+      isTyping?: boolean;
+      isSpeaking?: boolean;
+      partialText?: string;
+    }
+  ) => {
+    const existing = indicators.find(
+      (indicator) => indicator.userId === update.userId
+    );
+    const nextIndicator: TypingIndicator = {
+      userId: update.userId,
+      username: update.username ?? existing?.username ?? "Opponent",
+      isTyping: update.isTyping ?? existing?.isTyping ?? false,
+      isSpeaking: update.isSpeaking ?? existing?.isSpeaking ?? false,
+      partialText:
+        update.partialText !== undefined
+          ? update.partialText
+          : existing?.partialText,
+    };
+
+    if (
+      !nextIndicator.isTyping &&
+      !nextIndicator.isSpeaking &&
+      !nextIndicator.partialText
+    ) {
+      return indicators.filter(
+        (indicator) => indicator.userId !== update.userId
+      );
+    }
+
+    const filtered = indicators.filter(
+      (indicator) => indicator.userId !== update.userId
+    );
+    return [...filtered, nextIndicator];
+  };
+
   const handleWebSocketMessage = (message: any) => {
     switch (message.type) {
       case "DEBATE_START":
@@ -84,6 +124,39 @@ const Game: React.FC = () => {
         }));
         break;
       }
+      case "TYPING_STATUS": {
+        const data = JSON.parse(message.content);
+        const senderId: string | undefined = data.userId ?? data.sender;
+        if (!senderId || senderId === userId) {
+          break;
+        }
+        setState((prevState) => ({
+          ...prevState,
+          typingIndicators: upsertIndicator(prevState.typingIndicators, {
+            userId: senderId,
+            username: data.username,
+            isTyping: data.isTyping,
+            partialText: data.partialText,
+          }),
+        }));
+        break;
+      }
+      case "SPEAKING_STATUS": {
+        const data = JSON.parse(message.content);
+        const senderId: string | undefined = data.userId ?? data.sender;
+        if (!senderId || senderId === userId) {
+          break;
+        }
+        setState((prevState) => ({
+          ...prevState,
+          typingIndicators: upsertIndicator(prevState.typingIndicators, {
+            userId: senderId,
+            username: data.username,
+            isSpeaking: data.isSpeaking,
+          }),
+        }));
+        break;
+      }
       case "GENERATING_TRANSCRIPT": {
         const { sender } = JSON.parse(message.content);
         setState((prevState) => ({
@@ -94,7 +167,6 @@ const Game: React.FC = () => {
       }
 
       case "GAME_RESULT": {
-        console.log(message);
         const { winnerUserId, points, totalPoints, evaluationMessage } =
           JSON.parse(message.content);
         setState((prevState) => ({
@@ -109,49 +181,8 @@ const Game: React.FC = () => {
         }));
         break;
       }
-      case "TYPING_STATUS":
-      case "SPEAKING_STATUS": {
-        try {
-          const {
-            sender,
-            username,
-            isTyping = false,
-            isSpeaking = false,
-            partialText,
-          } = JSON.parse(message.content);
-
-          if (!sender || sender === userId) {
-            break;
-          }
-
-          setState((prevState) => {
-            const remainingIndicators = prevState.typingIndicators.filter(
-              (indicator) => indicator.userId !== sender
-            );
-
-            if (isTyping || isSpeaking) {
-              remainingIndicators.push({
-                userId: sender,
-                username: username || "Opponent",
-                isTyping: Boolean(isTyping),
-                isSpeaking: Boolean(isSpeaking),
-                partialText: partialText,
-              });
-            }
-
-            return {
-              ...prevState,
-              typingIndicators: remainingIndicators,
-            };
-          });
-        } catch (error) {
-          console.error("Failed to handle participant activity message:", error);
-        }
-        break;
-      }
 
       default:
-        console.warn("Unhandled message type:", message.type);
     }
   };
 
@@ -161,10 +192,7 @@ const Game: React.FC = () => {
     ws.binaryType = "arraybuffer";
     websocketRef.current = ws;
 
-    ws.onopen = () => console.log("WebSocket connection established");
     ws.onmessage = (event) => handleWebSocketMessage(JSON.parse(event.data));
-    ws.onerror = (error) => console.error("WebSocket error:", error);
-    ws.onclose = () => console.log("WebSocket connection closed");
 
     return () => ws.close();
   }, [userId]);
@@ -182,6 +210,7 @@ const Game: React.FC = () => {
           sender: userId,
           message: trimmed,
           mode,
+          timestamp: Date.now(),
         }),
       });
     },
@@ -198,11 +227,20 @@ const Game: React.FC = () => {
       sendWebSocketMessage({
         type: "TYPING_STATUS",
         content: JSON.stringify({
-          sender: userId,
+          userId,
           isTyping,
           partialText,
         }),
       });
+      setState((prevState) => ({
+        ...prevState,
+        typingIndicators: upsertIndicator(prevState.typingIndicators, {
+          userId: userId ?? "local",
+          username: "You",
+          isTyping,
+          partialText,
+        }),
+      }));
     },
     [sendWebSocketMessage, userId]
   );
@@ -217,10 +255,18 @@ const Game: React.FC = () => {
       sendWebSocketMessage({
         type: "SPEAKING_STATUS",
         content: JSON.stringify({
-          sender: userId,
+          userId,
           isSpeaking,
         }),
       });
+      setState((prevState) => ({
+        ...prevState,
+        typingIndicators: upsertIndicator(prevState.typingIndicators, {
+          userId: userId ?? "local",
+          username: "You",
+          isSpeaking,
+        }),
+      }));
     },
     [sendWebSocketMessage, userId]
   );

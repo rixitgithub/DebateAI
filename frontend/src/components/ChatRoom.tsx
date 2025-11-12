@@ -92,17 +92,15 @@ const ChatRoom = () => {
           setUserCount(data.count || 0);
           break;
         default:
-          console.log('Unknown message type:', data.type);
       }
     };
 
     wsRef.current.onclose = () => {
-      console.log('WebSocket connection closed');
       setJoined(false);
     };
 
     wsRef.current.onerror = (error: Event) => {
-      console.error('WebSocket error:', error);
+      console.error('ChatRoom WebSocket error', error);
     };
   };
 
@@ -112,7 +110,6 @@ const ChatRoom = () => {
       !wsRef.current ||
       wsRef.current.readyState !== WebSocket.OPEN
     ) {
-      console.warn('Cannot send message: WebSocket not open');
       return;
     }
     const timestamp = Math.floor(Date.now() / 1000);
@@ -130,7 +127,6 @@ const ChatRoom = () => {
 
   const sendReaction = (reactionType: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('Cannot send reaction: WebSocket not open');
       return;
     }
     if (wsRef.current) {
@@ -154,7 +150,6 @@ const ChatRoom = () => {
       !wsRef.current ||
       wsRef.current.readyState !== WebSocket.OPEN
     ) {
-      console.warn('Cannot vote: WebSocket not open or already voted');
       return;
     }
     if (wsRef.current) {

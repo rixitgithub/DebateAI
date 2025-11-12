@@ -26,6 +26,7 @@ import TeamBuilder from './Pages/TeamBuilder';
 import TeamDebateRoom from './Pages/TeamDebateRoom';
 import AdminSignup from './Pages/Admin/AdminSignup';
 import AdminDashboard from './Pages/Admin/AdminDashboard';
+import ViewDebate from './Pages/ViewDebate';
 
 // Protects routes based on authentication status
 function ProtectedRoute() {
@@ -91,6 +92,8 @@ function AppRoutes() {
         <Route path='/debate-room/:roomId' element={<OnlineDebateRoom />} />
         <Route path='/team-debate/:debateId' element={<TeamDebateRoom />} />
         <Route path='/spectator/:roomId' element={<ChatRoom />} />
+        <Route path='/debate/:debateID/view' element={<ViewDebate />} />
+        <Route path='/view-debate/:debateID' element={<ViewDebate />} />
         <Route path='/speech-test' element={<SpeechTest />} />
       </Route>
       {/* Redirect unknown routes */}
