@@ -9,7 +9,7 @@ import (
 	"log"
 	"regexp"
 	"time"
-	
+
 	"crypto/sha256"
 
 	"github.com/gin-gonic/gin"
@@ -49,7 +49,6 @@ func ExtractNameFromEmail(email string) string {
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Error hashing password: %v", err)
 		return "", fmt.Errorf("failed to hash password")
 	}
 	return string(bytes), nil
@@ -86,7 +85,6 @@ func GenerateJWTToken(userID, email string) (string, error) {
 
 	signedToken, err := token.SignedString(jwtSecret)
 	if err != nil {
-		log.Printf("Error signing token: %v", err)
 		return "", fmt.Errorf("failed to generate token")
 	}
 
@@ -122,7 +120,6 @@ func ParseJWTToken(tokenString string) (*Claims, error) {
 func GenerateRandomToken(length int) (string, error) {
 	b := make([]byte, length)
 	if _, err := rand.Read(b); err != nil {
-		log.Printf("Error generating random bytes: %v", err)
 		return "", fmt.Errorf("failed to generate random token")
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
@@ -133,13 +130,13 @@ func ValidateTokenAndFetchEmail(configPath, token string, c *gin.Context) (bool,
 	if err != nil {
 		return false, "", err
 	}
-	
+
 	// Try to get email from different possible fields
 	email := claims.Email
 	if email == "" {
 		email = claims.Sub
 	}
-	
+
 	return true, email, nil
 }
 
@@ -148,7 +145,7 @@ func GetUserIDFromToken(token string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	return claims.UserID, nil
 }
 

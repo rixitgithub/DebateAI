@@ -208,7 +208,6 @@ const DebateRoom: React.FC = () => {
   const phases = debateData.phaseTimings;
   const debateKey = `debate_${debateData.userId}_${debateData.topic}_${debateData.debateId}`;
   const [user] = useAtom(userAtom);
-  console.log("user", user);
 
   const [state, setState] = useState<DebateState>(() => {
     const savedState = localStorage.getItem(debateKey);
@@ -281,7 +280,7 @@ const DebateRoom: React.FC = () => {
 
         recognitionRef.current.onend = () => setIsRecognizing(false);
         recognitionRef.current.onerror = (event: Event) => {
-          console.error(
+          console.log(
             "Speech recognition error:",
             (event as ErrorEvent).error || event
           );
@@ -505,15 +504,32 @@ const DebateRoom: React.FC = () => {
         phase: phases[state.currentPhase].name,
       };
 
-      setState((prev) => ({
-        ...prev,
-        messages: [...prev.messages, botMessage],
-      }));
-
-      setNextTurnPending(true);
+      setState((prev) => {
+        const updatedState = {
+          ...prev,
+          messages: [...prev.messages, botMessage],
+        };
+        setTimeout(() => {
+          advanceTurn(updatedState);
+        }, 100);
+        return updatedState;
+      });
     } catch (error) {
       console.error("Bot error:", error);
-      setNextTurnPending(true);
+      setState((prev) => {
+        const errorMessage: Message = {
+          sender: "Bot",
+          text: "I encountered an error. Please continue.",
+          phase: phases[prev.currentPhase].name,
+        };
+        const updatedState = {
+          ...prev,
+          messages: [...prev.messages, errorMessage],
+          isBotTurn: false,
+        };
+        advanceTurn(updatedState);
+        return updatedState;
+      });
     } finally {
       botTurnRef.current = false;
     }
@@ -531,7 +547,6 @@ const DebateRoom: React.FC = () => {
       setPopup({ show: false, message: "" });
       setShowJudgment(true);
     } catch (error) {
-      console.error("Judging error:", error);
       setJudgmentData({
         opening_statement: {
           user: { score: 0, reason: "Error" },

@@ -193,7 +193,6 @@ const Profile: React.FC = () => {
         setDebateStatsLoading(false);
       } catch (err) {
         setErrorMessage("Failed to load dashboard data.");
-        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -224,7 +223,6 @@ const Profile: React.FC = () => {
       const transcript = await transcriptService.getTranscriptById(debate.id);
       setFullTranscript(transcript);
     } catch (err) {
-      console.error("Failed to fetch full transcript:", err);
     } finally {
       setTranscriptLoading(false);
     }
@@ -272,7 +270,6 @@ const Profile: React.FC = () => {
       setEditingField(null);
     } catch (err) {
       setErrorMessage(`Failed to update ${field}.`);
-      console.error(err);
     }
   };
 
@@ -302,7 +299,6 @@ const Profile: React.FC = () => {
       setErrorMessage("");
     } catch (err) {
       setErrorMessage("Failed to update avatar.");
-      console.error(err);
       // Optionally revert state on failure
       setDashboard({
         ...dashboard,

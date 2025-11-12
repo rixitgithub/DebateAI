@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"context"
-	"net/http"
-	"time"
+	cryptoRand "crypto/rand"
+	"math/big"
 	"math/rand"
+	"net/http"
 	"strings"
+	"time"
 
 	"arguehub/db"
 	"arguehub/models"
@@ -21,7 +23,14 @@ func generateTeamCode() string {
 	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 6)
 	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+		n, err := cryptoRand.Int(cryptoRand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// Fallback to time-based selection if cryptographic random fails
+			idx := (time.Now().UnixNano() + int64(i)) % int64(len(charset))
+			b[i] = charset[int(idx)]
+			continue
+		}
+		b[i] = charset[n.Int64()]
 	}
 	return string(b)
 }
@@ -29,7 +38,7 @@ func generateTeamCode() string {
 // GetTeamByCode retrieves a team by its unique code
 func GetTeamByCode(c *gin.Context) {
 	code := c.Param("code")
-	
+
 	collection := db.GetCollection("teams")
 	var team models.Team
 	err := collection.FindOne(context.Background(), bson.M{"code": strings.ToUpper(code)}).Decode(&team)
@@ -202,13 +211,17 @@ func CreateTeam(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You are already in a team. Leave your current team before creating a new one."})
 		return
 	}
+	if err != nil && err != mongo.ErrNoDocuments {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify existing team membership"})
+		return
+	}
 
 	// Set captain information
 	team.CaptainID = userID.(primitive.ObjectID)
 	team.CaptainEmail = userEmail.(string)
 	team.CreatedAt = time.Now()
 	team.UpdatedAt = time.Now()
-	
+
 	// Set default maxSize if not provided (only 2 or 4)
 	if team.MaxSize == 0 {
 		team.MaxSize = 4 // Default to 4 members
@@ -301,6 +314,10 @@ func JoinTeam(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User is already in a team"})
 		return
 	}
+	if err != nil && err != mongo.ErrNoDocuments {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify existing team membership"})
+		return
+	}
 
 	// Get user details
 	userCollection := db.GetCollection("users")
@@ -339,6 +356,14 @@ func JoinTeam(c *gin.Context) {
 	totalElo := 0.0
 	for _, member := range team.Members {
 		totalElo += member.Elo
+	}
+	capacity := team.MaxSize
+	if capacity <= 0 {
+		capacity = 4
+	}
+	if len(team.Members) >= capacity {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Team is already full"})
+		return
 	}
 	totalElo += newMember.Elo
 	newAverageElo := totalElo / float64(len(team.Members)+1)
@@ -577,13 +602,13 @@ func GetTeamMemberProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":       member.ID.Hex(),
-		"email":    member.Email,
+		"id":          member.ID.Hex(),
+		"email":       member.Email,
 		"displayName": member.DisplayName,
-		"avatarUrl": member.AvatarURL,
-		"rating":   member.Rating,
-		"rd":       member.RD,
-		"bio":      member.Bio,
+		"avatarUrl":   member.AvatarURL,
+		"rating":      member.Rating,
+		"rd":          member.RD,
+		"bio":         member.Bio,
 	})
 }
 
@@ -591,7 +616,12 @@ func GetTeamMemberProfile(c *gin.Context) {
 func GetAvailableTeams(c *gin.Context) {
 	collection := db.GetCollection("teams")
 	cursor, err := collection.Find(context.Background(), bson.M{
-		"$expr": bson.M{"$lt": []interface{}{bson.M{"$size": "$members"}, 4}}, // Teams with less than 4 members
+		"$expr": bson.M{
+			"$lt": bson.A{
+				bson.M{"$size": "$members"},
+				"$maxSize",
+			},
+		},
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve teams"})
@@ -607,4 +637,3 @@ func GetAvailableTeams(c *gin.Context) {
 
 	c.JSON(http.StatusOK, teams)
 }
-

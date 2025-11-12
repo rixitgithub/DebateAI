@@ -1,7 +1,8 @@
 import { getAuthToken } from "@/utils/auth";
 
 // Team service for API calls
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:1313";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:1313";
 
 export interface Team {
   id: string;

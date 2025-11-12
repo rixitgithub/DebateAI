@@ -26,15 +26,15 @@ interface Team {
   averageElo: number;
 }
 
-interface User {
-  id: string;
-  email: string;
-  displayName: string;
+interface MinimalUser {
+  id?: string | { $oid?: string };
+  email?: string;
+  displayName?: string;
 }
 
 interface TeamMatchmakingProps {
   team: Team;
-  user: User;
+  user: MinimalUser | null;
 }
 
 const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
@@ -48,7 +48,7 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
   // Check if current user is captain
   // Handle both string comparison and potential ObjectID structures
   const isCaptain = React.useMemo(() => {
-    if (!user || !team) return false;
+    if (!user?.id || !team) return false;
     
     // Convert captainId to string if it's an object (for backwards compatibility)
     const captainIdStr = typeof team.captainId === 'string' 
@@ -56,9 +56,12 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
       : (team.captainId as any)?.$oid || String(team.captainId);
     
     // Convert user.id to string if needed
-    const userIdStr = typeof user.id === 'string'
-      ? user.id
-      : (user.id as any)?.$oid || String(user.id);
+    const rawUserId = user.id;
+    const userIdStr = typeof rawUserId === 'string'
+      ? rawUserId
+      : (rawUserId as any)?.$oid || '';
+
+    if (!userIdStr) return false;
     
     // Check both ID and email
     return captainIdStr === userIdStr || team.captainEmail === user?.email;
@@ -73,7 +76,6 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
       try {
         const result: any = await getActiveTeamDebate(team.id);
         if (result.hasActiveDebate && result.debateId) {
-          console.log('[TeamMatchmaking] Active debate found:', result.debateId);
           // Store debate ID and show notification instead of auto-redirecting
           if (activeDebateId !== result.debateId) {
             setActiveDebateId(result.debateId);
@@ -88,7 +90,6 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
         }
       } catch (error) {
         // No active debate or error - this is normal
-        console.log('[TeamMatchmaking] No active debate for team');
         if (activeDebateId) {
           setActiveDebateId(null);
           setShowDebateNotification(false);
@@ -112,10 +113,9 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
         try {
           const status = await getMatchmakingStatus(team.id);
           if (status.matched) {
-            setMatchedTeam(status.team);
+            setMatchedTeam(status.team ?? null);
           }
         } catch (error) {
-          console.error('Failed to check matchmaking status:', error);
         }
       }, 3000); // Check every 3 seconds
 
@@ -160,7 +160,6 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
       const topic = 'Should AI be regulated?'; // Could be dynamic
       const debate = await createTeamDebate(team.id, matchedTeam.id, topic);
 
-      console.log('[TeamMatchmaking] Debate created:', debate.id);
       
       // Set the active debate ID - notification will show for all team members
       setActiveDebateId(debate.id);
@@ -185,7 +184,7 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
   };
 
   // Debug logging
-  console.log('[TeamMatchmaking] Captain check:', {
+  console.debug({
     isCaptain,
     'team.captainId': team.captainId,
     'user.id': user?.id,
@@ -194,7 +193,7 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
     hasJoined,
     matchedTeam: !!matchedTeam,
     isTeamFull,
-    isSearching
+    isSearching,
   });
 
   // Show debate notification for ALL team members (not just captain)
@@ -232,7 +231,6 @@ const TeamMatchmaking: React.FC<TeamMatchmakingProps> = ({ team, user }) => {
 
   // Only show matchmaking controls to captain
   if (!isCaptain) {
-    console.log('[TeamMatchmaking] User is not captain, showing notification only');
     return debateNotification;
   }
 

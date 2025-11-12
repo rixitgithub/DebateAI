@@ -19,11 +19,9 @@ import (
 
 func AuthMiddleware(configPath string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Printf("AuthMiddleware called for path: %s", c.Request.URL.Path)
-		
+
 		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
-			log.Printf("Failed to load config: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load configuration"})
 			c.Abort()
 			return
@@ -31,7 +29,6 @@ func AuthMiddleware(configPath string) gin.HandlerFunc {
 
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			log.Printf("No Authorization header for path: %s", c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
 			c.Abort()
 			return
@@ -66,11 +63,17 @@ func AuthMiddleware(configPath string) gin.HandlerFunc {
 		}
 
 		email := claims["sub"].(string)
-		
+
 		// Fetch user from database
 		dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
+		if db.MongoDatabase == nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database not initialized"})
+			c.Abort()
+			return
+		}
+
 		var user models.User
 		err = db.MongoDatabase.Collection("users").FindOne(dbCtx, bson.M{"email": email}).Decode(&user)
 		if err != nil {
