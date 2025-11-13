@@ -821,7 +821,8 @@ const TeamBuilder: React.FC = () => {
             <div className="space-y-4">
               {availableTeams.map((team) => {
                 const memberCount = team.members?.length || 0;
-                const capacity = team.maxSize || 4;
+                const capacity =
+                  team.maxSize && team.maxSize > 0 ? team.maxSize : 4;
                 const isFull = memberCount >= capacity;
 
                 return (

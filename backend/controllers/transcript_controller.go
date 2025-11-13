@@ -411,6 +411,8 @@ func UpdatePendingTranscriptsHandler(c *gin.Context) {
 		return
 	}
 
+	_ = email
+
 	err = services.UpdatePendingTranscripts()
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to update pending transcripts"})

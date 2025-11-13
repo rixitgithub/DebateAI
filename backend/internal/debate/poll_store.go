@@ -147,13 +147,18 @@ func (ps *PollStore) GetPollState(debateID string) (map[string]map[string]int64,
 		}
 	}
 
-	// Also gather poll IDs from counts keys (fallback)
+	// Also gather poll IDs from counts keys (fallback with SCAN)
 	pattern := fmt.Sprintf("debate:%s:poll:*:counts", debateID)
-	keys, err := ps.rdb.Keys(ps.ctx, pattern).Result()
-	if err == nil {
-		prefix := fmt.Sprintf("debate:%s:poll:", debateID)
-		suffix := ":counts"
-		for _, countsKey := range keys {
+	prefix := fmt.Sprintf("debate:%s:poll:", debateID)
+	suffix := ":counts"
+
+	var cursor uint64
+	for {
+		batch, nextCursor, err := ps.rdb.Scan(ps.ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to scan poll keys: %w", err)
+		}
+		for _, countsKey := range batch {
 			if !strings.HasPrefix(countsKey, prefix) || !strings.HasSuffix(countsKey, suffix) {
 				continue
 			}
@@ -162,6 +167,10 @@ func (ps *PollStore) GetPollState(debateID string) (map[string]map[string]int64,
 				pollIDs[pollID] = struct{}{}
 			}
 		}
+		if nextCursor == 0 {
+			break
+		}
+		cursor = nextCursor
 	}
 
 	pollState := make(map[string]map[string]int64)

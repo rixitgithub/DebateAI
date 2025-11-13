@@ -29,20 +29,31 @@ export const spectatorIdAtom = atom<string>(() => {
   return spectatorId;
 });
 
+const computeSpectatorHash = (input: string) => {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash << 5) - hash + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return `sp_${Math.abs(hash).toString(36)}`;
+};
+
 // User spectator hash atom (computed from spectator ID)
 export const spectatorHashAtom = atom<string>(() => {
   if (typeof window === 'undefined') return '';
   const stored = localStorage.getItem('spectatorHash');
   if (stored) return stored;
-  
-  const spectatorId =
-    localStorage.getItem('spectatorId') || crypto.randomUUID();
-  if (!localStorage.getItem('spectatorId')) {
+
+  // Generate hash from spectator ID
+  let spectatorId = localStorage.getItem('spectatorId');
+  if (!spectatorId) {
+    spectatorId = crypto.randomUUID();
     localStorage.setItem('spectatorId', spectatorId);
   }
 
-  // Hash is computed server-side; return the ID as a placeholder.
-  return spectatorId;
+  const hash = computeSpectatorHash(spectatorId);
+  localStorage.setItem('spectatorHash', hash);
+  return hash;
 });
 
 // Transcript atom (full transcript text)

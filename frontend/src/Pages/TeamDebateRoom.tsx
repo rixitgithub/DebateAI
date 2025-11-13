@@ -146,7 +146,7 @@ const TeamDebateRoom: React.FC = () => {
   const [localRole, setLocalRole] = useState<DebateRole | null>(null);
   const [peerRole, setPeerRole] = useState<DebateRole | null>(null);
   const [localReady, setLocalReady] = useState(false);
-  const [, setPeerReady] = useState(false);
+  const [peerReady, setPeerReady] = useState(false);
   const [debatePhase, setDebatePhase] = useState<DebatePhase>(
     DebatePhase.Setup
   );
@@ -181,6 +181,15 @@ const TeamDebateRoom: React.FC = () => {
   // State for media streams
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(true);
+  const toggleCamera = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (stream) {
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = !track.enabled;
+      });
+    }
+    setIsCameraOn((prev) => !prev);
+  }, []);
 
   // Timer state
   const [timer, setTimer] = useState<number>(0);
@@ -188,8 +197,9 @@ const TeamDebateRoom: React.FC = () => {
 
   // Speech recognition state
   const [isListening, setIsListening] = useState(false);
+  const [, setCurrentTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [, setSpeechError] = useState<string | null>(null);
   const [speechTranscripts, setSpeechTranscripts] = useState<{
     [key: string]: string;
   }>({});
@@ -384,8 +394,17 @@ const TeamDebateRoom: React.FC = () => {
   useEffect(() => {
     const token = getAuthToken();
     if (!token || !debateId) {
+      console.debug('Skipping team debate websocket setup', {
+        hasToken: !!token,
+        debateId,
+      });
       return;
     }
+
+    console.debug('Opening team debate websocket', {
+      debateId,
+      userId: currentUser?.id,
+    });
 
     const ws = new WebSocket(
       `ws://localhost:1313/ws/team?debateId=${debateId}&token=${token}`
@@ -484,11 +503,13 @@ const TeamDebateRoom: React.FC = () => {
           
           // Check if opponent team members are all ready (but don't override localReady)
           // localReady should only be set when the user clicks the ready button
-          const opponentReadyRaw = isTeam1Latest ? data.team2Ready : data.team1Ready;
-          const opponentCount =
-            (isTeam1Latest ? data.team2MembersCount : data.team1MembersCount) ?? 0;
-          const opponentReady = opponentReadyRaw ?? 0;
-          setPeerReady(opponentCount > 0 && opponentReady === opponentCount);
+          const opponentReady = isTeam1 ? data.team2Ready : data.team1Ready;
+          const opponentCountRaw = isTeam1 ? data.team2MembersCount : data.team1MembersCount;
+          const opponentReadyCount = opponentReady ?? 0;
+          const opponentMemberCount = opponentCountRaw ?? 0;
+          setPeerReady(
+            opponentMemberCount > 0 && opponentReadyCount === opponentMemberCount
+          );
           
           // Update localReady if we have the user's ready status in stateSync
           if (currentUserIdLatest) {
@@ -518,20 +539,30 @@ const TeamDebateRoom: React.FC = () => {
             }
           }
           // Initialize ready status for new members (default to false)
-          setPlayerReadyStatus(prev => {
-            const updated = new Map(prev);
-            (data.team1Members ?? []).forEach((member: TeamMember) => {
-              if (!updated.has(member.userId)) {
-                updated.set(member.userId, false);
-              }
+          const team1Members = data.team1Members ?? [];
+          if (team1Members.length) {
+            setPlayerReadyStatus(prev => {
+              const updated = new Map(prev);
+              team1Members.forEach((member: TeamMember) => {
+                if (!updated.has(member.userId)) {
+                  updated.set(member.userId, false);
+                }
+              });
+              return updated;
             });
-            (data.team2Members ?? []).forEach((member: TeamMember) => {
-              if (!updated.has(member.userId)) {
-                updated.set(member.userId, false);
-              }
+          }
+          const team2Members = data.team2Members ?? [];
+          if (team2Members.length) {
+            setPlayerReadyStatus(prev => {
+              const updated = new Map(prev);
+              team2Members.forEach((member: TeamMember) => {
+                if (!updated.has(member.userId)) {
+                  updated.set(member.userId, false);
+                }
+              });
+              return updated;
             });
-            return updated;
-          });
+          }
           break;
         case "topicChange":
           if (data.topic !== undefined) setTopic(data.topic);
@@ -600,13 +631,28 @@ const TeamDebateRoom: React.FC = () => {
           // CRITICAL: Each user should see their own team correctly
           // Use (data as any) to access fields that might not be in TypeScript interface
           const dataAny = data as any;
-          const oppReadyCount = isTeam1Latest
-            ? (data.team2Ready ?? dataAny.team2Ready)
-            : (data.team1Ready ?? dataAny.team1Ready);
-          const oppTeamTotal = isTeam1Latest
-            ? (data.team2MembersCount ?? dataAny.team2MembersCount)
-            : (data.team1MembersCount ?? dataAny.team1MembersCount);
-          const allOppReady = oppTeamTotal > 0 && oppReadyCount === oppTeamTotal;
+          const myTeamReadyCount = isTeam1 ? (data.team1Ready ?? dataAny.team1Ready) : (data.team2Ready ?? dataAny.team2Ready);
+          const myTeamTotal = isTeam1 ? (data.team1MembersCount ?? dataAny.team1MembersCount) : (data.team2MembersCount ?? dataAny.team2MembersCount);
+          const oppReadyCount = isTeam1 ? (data.team2Ready ?? dataAny.team2Ready) : (data.team1Ready ?? dataAny.team1Ready);
+          const oppTeamTotal = isTeam1 ? (data.team2MembersCount ?? dataAny.team2MembersCount) : (data.team1MembersCount ?? dataAny.team1MembersCount);
+
+          console.debug('Ready status update', {
+            myTeamReadyCount,
+            myTeamTotal,
+            oppReadyCount,
+            oppTeamTotal,
+          });
+
+          // Validation: Ensure we're showing the right team
+          if (data.userId === currentUser?.id && isTeam1) {
+            const expectedTeamForUser = "Team1";
+            if (isTeam1 !== (data.team1Members?.some(m => m.userId === currentUser?.id) ?? false)) {
+            } else {
+            }
+          }
+          
+          // Update peer ready status (whether all opponent team members are ready)
+          const allOppReady = oppReadyCount === oppTeamTotal && oppTeamTotal > 0;
           setPeerReady(allOppReady);
           break;
         case "phaseChange":
@@ -968,7 +1014,20 @@ const TeamDebateRoom: React.FC = () => {
     const allMyTeamReady = myTeamReadyCount === myTeamTotal && myTeamTotal > 0;
     const allOpponentReady = oppTeamReadyCount === oppTeamTotal && oppTeamTotal > 0;
     const allReady = allMyTeamReady && allOpponentReady;
-    
+
+    console.log("Setup popup state:", {
+      myTeamReadyCount,
+      myTeamTotal,
+      allMyTeamReady,
+      oppTeamReadyCount,
+      oppTeamTotal,
+      allOpponentReady,
+      allReady,
+      localReady,
+      peerReady,
+      debatePhase,
+    });
+
     // CRITICAL: Check if debate has started first - if so, NEVER show popup again
     if (debateStartedRef.current || debatePhase !== DebatePhase.Setup) {
       // Debate has started - don't show popup EVER
@@ -1055,6 +1114,19 @@ const TeamDebateRoom: React.FC = () => {
   const hasAuthToken = !!token;
   
   // Debug: Log user state for troubleshooting
+  useEffect(() => {
+    if (hasAuthToken && !currentUser?.id) {
+      console.log("Auth state while loading user:", {
+        hasToken: hasAuthToken,
+        currentUser,
+        userFromAtom: user,
+        userFromHook,
+        isUserLoading,
+        isAuthenticated,
+      });
+    }
+  }, [hasAuthToken, currentUser, user, userFromHook, isUserLoading, isAuthenticated]);
+  
   // Show loading while debate is loading, or while user is loading (if we have a token)
   if (!debate || isLoading) {
     return (

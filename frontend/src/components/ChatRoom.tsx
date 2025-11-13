@@ -99,7 +99,9 @@ const ChatRoom = () => {
       setJoined(false);
     };
 
-    wsRef.current.onerror = () => {};
+    wsRef.current.onerror = (error: Event) => {
+      console.error('ChatRoom WebSocket error', error);
+    };
   };
 
   const sendMessage = () => {

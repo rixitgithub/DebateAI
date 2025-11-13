@@ -55,18 +55,16 @@ export const ReactionBar: React.FC = () => {
   const { sendMessage } = useDebateWS(debateId);
 
   const handleReaction = (emoji: string) => {
-    if (!debateId) return;
-    const effectiveHash =
+    const storedHash =
       spectatorHash ||
       localStorage.getItem('spectatorHash') ||
       localStorage.getItem('spectatorId') ||
       '';
-
-    if (!effectiveHash) return;
+    if (!debateId || !storedHash) return;
 
     const payload = {
       reaction: emoji,
-      spectatorHash: effectiveHash,
+      spectatorHash: storedHash,
       timestamp: Date.now(),
     };
 

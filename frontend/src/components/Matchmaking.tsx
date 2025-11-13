@@ -117,13 +117,19 @@ const Matchmaking: React.FC = () => {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      console.warn(
+        '🔌 Disconnected from matchmaking WebSocket:',
+        event.code,
+        event.reason
+      );
       setIsConnected(false);
       setIsInPool(false);
       // Don't set wsRef.current = null here, let the cleanup handle it
     };
 
-    ws.onerror = () => {
+    ws.onerror = (error) => {
+      console.error('Matchmaking WebSocket error', error);
       setIsConnected(false);
     };
 

@@ -467,10 +467,6 @@ func CreateDebateService(debate *models.DebateVsBot, stance string) (string, err
 		return "", fmt.Errorf("database not initialized")
 	}
 
-	// Log bot personality for debugging
-	bot := GetBotPersonality(debate.BotName)
-	fmt.Printf("bot personality for %s: %+v\n", debate.BotName, bot)
-
 	result, err := db.DebateVsBotCollection.InsertOne(ctx, debate)
 	if err != nil {
 		return "", err

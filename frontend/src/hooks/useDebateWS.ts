@@ -9,6 +9,7 @@ import {
   wsStatusAtom,
   presenceAtom,
   spectatorHashAtom,
+  lastEventIdAtom,
   PollInfo,
 } from '../atoms/debateAtoms';
 import ReconnectingWebSocket from 'reconnecting-websocket';
@@ -20,13 +21,14 @@ interface Event {
 }
 
 export const useDebateWS = (debateId: string | null) => {
-  const [, setWs] = useAtom(wsAtom);
+  const [ws, setWs] = useAtom(wsAtom);
   const [, setDebateId] = useAtom(debateIdAtom);
   const [, setPollState] = useAtom(pollStateAtom);
   const [, setQuestions] = useAtom(questionsAtom);
   const [, setReactions] = useAtom(reactionsAtom);
   const [, setWsStatus] = useAtom(wsStatusAtom);
   const [, setPresence] = useAtom(presenceAtom);
+  const [, setLastEventId] = useAtom(lastEventIdAtom);
   const [spectatorHash] = useAtom(spectatorHashAtom);
   const wsRef = useRef<ReconnectingWebSocket | null>(null);
 
@@ -34,6 +36,31 @@ export const useDebateWS = (debateId: string | null) => {
     if (!debateId) return;
 
     setDebateId(debateId);
+
+    if (wsRef.current) {
+      return;
+    }
+
+    if (ws) {
+      const existing = ws as unknown as ReconnectingWebSocket;
+      if (
+        existing.readyState === WebSocket.CLOSING ||
+        existing.readyState === WebSocket.CLOSED
+      ) {
+        setWs(null);
+      } else {
+        wsRef.current = existing;
+        if (existing.readyState === WebSocket.OPEN) {
+          setWsStatus('connected');
+        } else if (existing.readyState === WebSocket.CONNECTING) {
+          setWsStatus('connecting');
+        } else {
+          setWsStatus('disconnected');
+        }
+        return;
+      }
+    }
+
     setWsStatus('connecting');
 
     // Get WebSocket URL
@@ -47,17 +74,17 @@ export const useDebateWS = (debateId: string | null) => {
         host = apiUrl.replace(/^https?:\/\//, '');
       }
     }
-    
-    // Ensure we have a spectator ID
+
     let spectatorId = localStorage.getItem('spectatorId');
     if (!spectatorId) {
       spectatorId = crypto.randomUUID();
       localStorage.setItem('spectatorId', spectatorId);
     }
-    
-    const wsUrl = `${protocol}//${host}/ws/debate/${debateId}${spectatorId ? `?spectatorId=${spectatorId}` : ''}`;
 
-    // Create reconnecting WebSocket
+    const wsUrl = `${protocol}//${host}/ws/debate/${debateId}${
+      spectatorId ? `?spectatorId=${spectatorId}` : ''
+    }`;
+
     const rws = new ReconnectingWebSocket(wsUrl, [], {
       connectionTimeout: 4000,
       maxRetries: Infinity,
@@ -67,13 +94,14 @@ export const useDebateWS = (debateId: string | null) => {
     });
 
     wsRef.current = rws;
+    setWs(rws as unknown as WebSocket);
+    let ownsConnection = true;
 
     rws.onopen = () => {
       setWsStatus('connected');
-      setWs(rws as any);
 
-      // Send join message
-      const spectatorHashValue = spectatorHash || localStorage.getItem('spectatorHash') || '';
+      const spectatorHashValue =
+        spectatorHash || localStorage.getItem('spectatorHash') || '';
       const joinMessage = {
         type: 'join',
         payload: {
@@ -87,12 +115,10 @@ export const useDebateWS = (debateId: string | null) => {
       try {
         const eventData: Event = JSON.parse(event.data);
 
-        // Update last event ID
-        if (eventData.type !== 'poll_snapshot') {
-          // Store for replay if needed
+        if (eventData.type !== 'poll_snapshot' && eventData.timestamp) {
+          setLastEventId(String(eventData.timestamp));
         }
 
-        // Route messages to atoms
         switch (eventData.type) {
           case 'poll_snapshot': {
             const payload = eventData.payload || {};
@@ -166,7 +192,6 @@ export const useDebateWS = (debateId: string | null) => {
           }
 
           case 'vote':
-            // Update poll state
             setPollState((prev) => {
               const pollId = eventData.payload?.pollId;
               const option = eventData.payload?.option;
@@ -237,32 +262,26 @@ export const useDebateWS = (debateId: string | null) => {
           }
 
           case 'question':
-            setQuestions((prev) => {
-              const newQuestions = [
-                ...prev,
-                {
-                  qId: eventData.payload.qId,
-                  text: eventData.payload.text,
-                  spectatorHash: eventData.payload.spectatorHash,
-                  timestamp: eventData.payload.timestamp,
-                },
-              ];
-              return newQuestions;
-            });
+            setQuestions((prev) => [
+              ...prev,
+              {
+                qId: eventData.payload.qId,
+                text: eventData.payload.text,
+                spectatorHash: eventData.payload.spectatorHash,
+                timestamp: eventData.payload.timestamp,
+              },
+            ]);
             break;
 
           case 'reaction':
-            setReactions((prev) => {
-              const newReactions = [
-                ...prev.slice(-49), // Keep last 50
-                {
-                  reaction: eventData.payload.reaction,
-                  spectatorHash: eventData.payload.spectatorHash,
-                  timestamp: eventData.payload.timestamp,
-                },
-              ];
-              return newReactions;
-            });
+            setReactions((prev) => [
+              ...prev.slice(-49),
+              {
+                reaction: eventData.payload.reaction,
+                spectatorHash: eventData.payload.spectatorHash,
+                timestamp: eventData.payload.timestamp,
+              },
+            ]);
             break;
 
           case 'presence': {
@@ -284,17 +303,35 @@ export const useDebateWS = (debateId: string | null) => {
     rws.onclose = () => {
       setWsStatus('disconnected');
       setWs(null);
+      if (wsRef.current === rws) {
+        wsRef.current = null;
+      }
     };
 
     return () => {
-      if (rws) {
+      if (ownsConnection) {
         rws.close();
-        wsRef.current = null;
+        if (wsRef.current === rws) {
+          wsRef.current = null;
+        }
         setWs(null);
         setWsStatus('disconnected');
       }
+      ownsConnection = false;
     };
-  }, [debateId, spectatorHash, setWs, setDebateId, setPollState, setQuestions, setReactions, setWsStatus, setPresence]);
+  }, [
+    debateId,
+    spectatorHash,
+    ws,
+    setWs,
+    setDebateId,
+    setPollState,
+    setQuestions,
+    setReactions,
+    setWsStatus,
+    setLastEventId,
+    setPresence,
+  ]);
 
   const sendMessage = (type: string, payload: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

@@ -1,5 +1,5 @@
 // Team debate service for API calls
-import { Team, TeamMember } from "./teamService";
+import { Team } from "./teamService";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL?.replace(/\/+$/, "") ?? "http://localhost:1313";
@@ -8,14 +8,23 @@ function getAuthToken(): string {
   return localStorage.getItem("token") || "";
 }
 
+export interface TeamDebateMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  elo: number;
+  joinedAt: string;
+}
+
 export interface TeamDebate {
   id: string;
   team1Id: string;
   team2Id: string;
   team1Name: string;
   team2Name: string;
-  team1Members: TeamMember[];
-  team2Members: TeamMember[];
+  team1Members: TeamDebateMember[];
+  team2Members: TeamDebateMember[];
   topic: string;
   team1Stance: string;
   team2Stance: string;
@@ -150,7 +159,8 @@ export const getMatchmakingPool = async (): Promise<TeamMatchmakingPoolResponse>
     throw new Error("Failed to get matchmaking pool");
   }
 
-  return response.json();
+  const data: MatchmakingPoolResponse = await response.json();
+  return data;
 };
 
 export const getMatchmakingStatus = async (
@@ -167,6 +177,7 @@ export const getMatchmakingStatus = async (
     throw new Error("Failed to get matchmaking status");
   }
 
-  return response.json();
+  const data: MatchmakingStatusResponse = await response.json();
+  return data;
 };
 
