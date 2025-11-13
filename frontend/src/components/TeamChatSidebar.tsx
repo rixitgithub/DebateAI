@@ -41,11 +41,21 @@ const TeamChatSidebar: React.FC<TeamChatSidebarProps> = ({
   useEffect(() => {
     if (!ws) return;
 
-    ws.onopen = () => {
-      console.log('Team chat WebSocket connected');
-      setIsConnected(true);
-      ws.send(JSON.stringify({ type: 'join', room: teamId }));
+    const sendJoin = () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'join', room: teamId }));
+      }
     };
+
+    ws.onopen = () => {
+      setIsConnected(true);
+      sendJoin();
+    };
+
+    if (ws.readyState === WebSocket.OPEN) {
+      setIsConnected(true);
+      sendJoin();
+    }
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -64,12 +74,11 @@ const TeamChatSidebar: React.FC<TeamChatSidebarProps> = ({
     };
 
     ws.onclose = () => {
-      console.log('Team chat WebSocket disconnected');
       setIsConnected(false);
     };
 
     ws.onerror = (error) => {
-      console.error('Team chat WebSocket error:', error);
+      console.error('TeamChatSidebar WebSocket error', error);
       setIsConnected(false);
     };
 

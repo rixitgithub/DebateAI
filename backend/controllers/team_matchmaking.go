@@ -90,13 +90,13 @@ func LeaveMatchmaking(c *gin.Context) {
 	var team models.Team
 	ctxLeave, cancelLeave := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancelLeave()
-	err = collection.FindOne(ctxLeave, bson.M{"_id": objectID}).Decode(&team)
-	if err != nil {
+	if err := collection.FindOne(ctxLeave, bson.M{"_id": objectID}).Decode(&team); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Team not found"})
 		return
 	}
 
-	if team.CaptainID != userID.(primitive.ObjectID) {
+	userObjectID, ok := userID.(primitive.ObjectID)
+	if !ok || team.CaptainID != userObjectID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only the captain can leave matchmaking"})
 		return
 	}

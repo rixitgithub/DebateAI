@@ -3,7 +3,6 @@ package websocket
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"time"
 
 	"arguehub/db"
@@ -81,16 +80,10 @@ func TeamDebateHubRun() {
 					room.team2Clients[client] = true
 				}
 
-				// Send current debate state to new client
-				stateMsg := TeamDebateMessage{
+				room.broadcastToTeam(client, TeamDebateMessage{
 					Type: "state",
 					Data: room.debate,
-				}
-				if payload, err := json.Marshal(stateMsg); err == nil {
-					client.send <- payload
-				} else {
-					log.Printf("error marshaling state: %v", err)
-				}
+				})
 			}
 
 		case client := <-teamDebateHub.unregister:
@@ -167,14 +160,12 @@ func (c *TeamDebateClient) readPump() {
 		_, messageBytes, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
 			}
 			break
 		}
 
 		var message TeamDebateMessage
 		if err := json.Unmarshal(messageBytes, &message); err != nil {
-			log.Printf("Error unmarshaling message: %v", err)
 			continue
 		}
 
@@ -205,7 +196,6 @@ func (c *TeamDebateClient) readPump() {
 
 			_, err := collection.InsertOne(context.Background(), msg)
 			if err != nil {
-				log.Printf("Error storing message: %v", err)
 			}
 
 			// Broadcast to all clients in debate

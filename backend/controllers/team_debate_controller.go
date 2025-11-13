@@ -19,7 +19,7 @@ func CreateTeamDebate(c *gin.Context) {
 	var req struct {
 		Team1ID primitive.ObjectID `json:"team1Id" binding:"required"`
 		Team2ID primitive.ObjectID `json:"team2Id" binding:"required"`
-		Topic   string            `json:"topic" binding:"required"`
+		Topic   string             `json:"topic" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -41,6 +41,11 @@ func CreateTeamDebate(c *gin.Context) {
 	err = collection.FindOne(context.Background(), bson.M{"_id": req.Team2ID}).Decode(&team2)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Team 2 not found"})
+		return
+	}
+
+	if req.Team1ID == req.Team2ID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot create a debate with the same team on both sides"})
 		return
 	}
 
@@ -131,7 +136,7 @@ func GetActiveTeamDebate(c *gin.Context) {
 		},
 		"status": "active",
 	}).Decode(&debate)
-	
+
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"hasActiveDebate": false})
 		return

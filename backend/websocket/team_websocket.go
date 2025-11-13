@@ -137,7 +137,7 @@ func TeamWebsocketHandler(c *gin.Context) {
 	}
 
 	// Get user details from database
-	userID, username, err := getUserDetails(email)
+	userID, username, _, _, err := getUserDetails(email)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details"})
 		return

@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -77,20 +76,11 @@ func FindMatchingTeam(lookingTeamID primitive.ObjectID) (*models.Team, error) {
 		return nil, mongo.ErrNoDocuments
 	}
 
-	// Log pool status for debugging
-	log.Printf("Matchmaking pool size: %d, looking team: %s (Elo: %.2f)",
-		len(teamMatchmakingPool), lookingTeamID.Hex(), lookingEntry.AverageElo)
-
 	// Find teams with matching size and similar elo
 	for teamID, entry := range teamMatchmakingPool {
 		if teamID == lookingTeamID.Hex() {
 			continue
 		}
-
-		// Log each comparison
-		log.Printf("Comparing %s (Elo: %.2f) with %s (Elo: %.2f)",
-			lookingTeamID.Hex(), lookingEntry.AverageElo,
-			teamID, entry.AverageElo)
 
 		// Check if sizes match
 		if entry.MaxSize == lookingEntry.MaxSize {
@@ -100,16 +90,12 @@ func FindMatchingTeam(lookingTeamID primitive.ObjectID) (*models.Team, error) {
 				eloDiff = -eloDiff
 			}
 
-			log.Printf("Size match: %d, Elo diff: %.2f (threshold: 200)", entry.MaxSize, eloDiff)
-
 			if eloDiff <= 200 {
-				log.Printf("Match found! %s vs %s", lookingTeamID.Hex(), teamID)
 				return &entry.Team, nil
 			}
 		}
 	}
 
-	log.Printf("No match found for team %s", lookingTeamID.Hex())
 	return nil, mongo.ErrNoDocuments
 }
 

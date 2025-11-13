@@ -107,7 +107,6 @@ const TeamBuilder: React.FC = () => {
       const teams = await getAvailableTeams();
       setAvailableTeams(teams || []);
     } catch (error) {
-      console.error("Failed to fetch available teams:", error);
       setAvailableTeams([]);
     }
   }, []);
@@ -118,7 +117,6 @@ const TeamBuilder: React.FC = () => {
       const teams = await getUserTeams();
       setUserTeams(teams || []);
     } catch (error) {
-      console.error("Failed to fetch user teams:", error);
       setUserTeams([]);
     }
   }, []);
@@ -155,7 +153,6 @@ const TeamBuilder: React.FC = () => {
       setTimeout(() => setSuccess(""), 3000);
     } catch (error: unknown) {
       setError((error as Error).message || "Failed to create team");
-      console.error("Failed to create team:", error);
     } finally {
       setIsCreating(false);
     }
@@ -170,7 +167,6 @@ const TeamBuilder: React.FC = () => {
       setTimeout(() => setSuccess(""), 3000);
     } catch (error: unknown) {
       setError((error as Error).message || "Failed to join team");
-      console.error("Failed to join team:", error);
       setTimeout(() => setError(""), 5000);
     }
   };
@@ -194,7 +190,6 @@ const TeamBuilder: React.FC = () => {
 
       setIsMemberProfileOpen(true);
     } catch (error) {
-      console.error("Failed to load member profile:", error);
     }
   };
 
@@ -827,7 +822,12 @@ const TeamBuilder: React.FC = () => {
             <div className="space-y-4">
               {availableTeams.map((team) => {
                 const memberCount = team.members?.length || 0;
+<<<<<<< HEAD
                 const capacity = team.maxSize || 4;
+=======
+                const capacity =
+                  team.maxSize && team.maxSize > 0 ? team.maxSize : 4;
+>>>>>>> main
                 const isFull = memberCount >= capacity;
 
                 return (
