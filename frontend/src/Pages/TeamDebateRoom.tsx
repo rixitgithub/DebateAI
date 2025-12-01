@@ -193,15 +193,6 @@ const TeamDebateRoom: React.FC = () => {
   const [, setLocalStream] = useState<MediaStream | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(true);
-  const toggleCamera = useCallback(() => {
-    const stream = localStreamRef.current;
-    if (stream) {
-      stream.getVideoTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-    }
-    setIsCameraOn((prev) => !prev);
-  }, []);
 
   // Refs mirroring frequently used reactive state inside WebSocket handlers
   const isTeam1Ref = useRef(isTeam1);
@@ -213,11 +204,6 @@ const TeamDebateRoom: React.FC = () => {
   useEffect(() => {
     myTeamIdRef.current = myTeamId;
   }, [myTeamId]);
-
-  const debatePhaseRef = useRef<DebatePhase>(debatePhase);
-  useEffect(() => {
-    debatePhaseRef.current = debatePhase;
-  }, [debatePhase]);
 
   const currentUserIdRef = useRef<string | undefined>(currentUser?.id);
   useEffect(() => {

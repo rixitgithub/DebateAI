@@ -10,6 +10,7 @@ interface TeamDebateMember {
   avatarUrl?: string;
   elo: number;
 }
+>>>>>>> main
 
 function getAuthToken(): string {
   return localStorage.getItem("token") || "";

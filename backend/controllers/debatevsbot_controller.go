@@ -279,9 +279,9 @@ func JudgeDebate(c *gin.Context) {
 	)
 
 	// Update gamification (score, badges, streaks) after bot debate
-	log.Printf("About to call updateGamificationAfterBotDebate for user %s, result: %s, topic: %s", 
+	log.Printf("About to call updateGamificationAfterBotDebate for user %s, result: %s, topic: %s",
 		userID.Hex(), resultStatus, latestDebate.Topic)
-	
+
 	// Call synchronously but with recover to prevent panics from crashing the request
 	func() {
 		defer func() {
@@ -296,6 +296,7 @@ func JudgeDebate(c *gin.Context) {
 		Result: result,
 	})
 }
+
 // updateGamificationAfterBotDebate updates user score, checks for badges, and updates streaks after a bot debate
 func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, topic string) {
 	// Add recover to catch any panics
@@ -318,7 +319,7 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 
 	userCollection := db.MongoDatabase.Collection("users")
 	log.Printf("User collection retrieved, attempting to find user %s", userID.Hex())
-	
+
 	// Get current user to check existing badges and score
 	var user models.User
 	err := userCollection.FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
@@ -326,7 +327,7 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 		log.Printf("ERROR: Failed to get user for gamification update: %v (userID: %s)", err, userID.Hex())
 		return
 	}
-	
+
 	log.Printf("Successfully retrieved user: %s (email: %s)", userID.Hex(), user.Email)
 
 	log.Printf("Current user score: %d, badges: %v", user.Score, user.Badges)
@@ -370,7 +371,7 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 		log.Printf("Error updating score with UpdateOne: %v", err)
 		return
 	}
-	
+
 	if updateResult.MatchedCount == 0 {
 		log.Printf("User not found for score update: %s", userID.Hex())
 		return
@@ -513,4 +514,3 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 	// Check for Debater10 badge (10 debates completed)
 	// Note: This would require tracking debate count, which might need to be added
 }
-

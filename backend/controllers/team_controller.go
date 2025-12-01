@@ -313,6 +313,10 @@ func JoinTeam(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User is already in a team"})
 		return
 	}
+	if err != nil && err != mongo.ErrNoDocuments {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify existing team membership"})
+		return
+	}
 
 	// Get user details
 	userCollection := db.GetCollection("users")
@@ -361,6 +365,14 @@ func JoinTeam(c *gin.Context) {
 	totalElo := 0.0
 	for _, member := range team.Members {
 		totalElo += member.Elo
+	}
+	capacity := team.MaxSize
+	if capacity <= 0 {
+		capacity = 4
+	}
+	if len(team.Members) >= capacity {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Team is already full"})
+		return
 	}
 	totalElo += newMember.Elo
 	newAverageElo := totalElo / float64(len(team.Members)+1)
