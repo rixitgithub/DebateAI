@@ -118,6 +118,10 @@ const phaseDurations: { [key in DebatePhase]?: number } = {
   [DebatePhase.ClosingAgainst]: 45,
 };
 
+const BASE_URL =
+  (import.meta.env.VITE_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
+  window.location.origin;
+
 // Function to extract JSON from response
 const extractJSON = (response: string): string => {
   const fenceRegex = /```(?:json)?\s*([\s\S]*?)\s*```/;
@@ -179,6 +183,11 @@ const TeamDebateRoom: React.FC = () => {
   const remoteVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
   const debateStartedRef = useRef<boolean>(false); // Track if debate has started to prevent popup reopening
+  const debatePhaseRef = useRef<DebatePhase>(debatePhase);
+
+  useEffect(() => {
+    debatePhaseRef.current = debatePhase;
+  }, [debatePhase]);
 
   // State for media streams
   const [, setLocalStream] = useState<MediaStream | null>(null);
@@ -413,9 +422,12 @@ const TeamDebateRoom: React.FC = () => {
       userId: currentUser?.id,
     });
 
-    const ws = new WebSocket(
-      `ws://localhost:1313/ws/team?debateId=${debateId}&token=${token}`
-    );
+    const wsUrl = new URL("/ws/team", BASE_URL);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    wsUrl.searchParams.set("debateId", debateId);
+    wsUrl.searchParams.set("token", token);
+
+    const ws = new WebSocket(wsUrl.toString());
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -431,7 +443,7 @@ const TeamDebateRoom: React.FC = () => {
       const currentPhase = debatePhaseRef.current;
 
       switch (data.type) {
-        case "stateSync":
+        case "stateSync": {
           // Sync all state when joining or receiving state update
           if (data.topic !== undefined) setTopic(data.topic);
           // CRITICAL: Only sync phase if debate hasn't started, or if backend phase is ahead
@@ -440,6 +452,9 @@ const TeamDebateRoom: React.FC = () => {
             // Don't allow stateSync to reset phase back to Setup if debate has started
             if (debateStartedRef.current && backendPhase === DebatePhase.Setup) {
             } else {
+              console.log(
+                `stateSync: updating phase from ${debatePhaseRef.current} to ${backendPhase}`
+              );
               setDebatePhase(backendPhase);
               // If backend says phase is not Setup, mark debate as started
               if (backendPhase !== DebatePhase.Setup) {
@@ -531,7 +546,8 @@ const TeamDebateRoom: React.FC = () => {
           }
           
           break;
-        case "teamMembers":
+        }
+        case "teamMembers": {
           if (data.team1Members) {
             if (amTeam1) {
               setMyTeamMembers(data.team1Members);
@@ -572,10 +588,11 @@ const TeamDebateRoom: React.FC = () => {
             });
           }
           break;
+        }
         case "topicChange":
           if (data.topic !== undefined) setTopic(data.topic);
           break;
-        case "roleSelection":
+        case "roleSelection": {
           if (data.role && data.teamId) {
             // Determine if this is from our team or opponent team based on teamId
             const messageTeamId = data.teamId;
@@ -593,18 +610,40 @@ const TeamDebateRoom: React.FC = () => {
             }
           }
           break;
-        case "countdownStart":
+        }
+        case "countdownStart": {
           // Backend is starting countdown - show it to all users
           const countdownValue = (data as any).countdown || 3;
           setCountdown(countdownValue);
           // Hide setup popup when countdown starts
           setShowSetupPopup(false);
           break;
+        }
         case "checkStart":
           // Ignore checkStart messages from backend (we shouldn't receive them)
           // This is sent by frontend to backend, not the other way around
           break;
-        case "ready":
+        case "ready": {
+          console.log("=== READY MESSAGE RECEIVED ===");
+          console.log("Received ready message:", data);
+          console.log("Current user:", currentUser?.id);
+          console.log("Message userId:", data.userId);
+          console.log("Message teamId:", data.teamId);
+          console.log("Message assignedToTeam:", (data as any).assignedToTeam);
+          console.log("isTeam1:", isTeam1);
+          console.log("myTeamId:", myTeamId);
+          console.log(
+            "Team1Ready:",
+            data.team1Ready,
+            "Team2Ready:",
+            data.team2Ready
+          );
+          console.log(
+            "Team1MembersCount:",
+            data.team1MembersCount,
+            "Team2MembersCount:",
+            data.team2MembersCount
+          );
           
           // CRITICAL: Verify the ready status is assigned to the correct team
           const messageTeamId = data.teamId;
@@ -679,13 +718,18 @@ const TeamDebateRoom: React.FC = () => {
           const allOppReady = oppReadyCount === oppTeamTotal && oppTeamTotal > 0;
           setPeerReady(allOppReady);
           break;
-        case "phaseChange":
+        }
+        case "phaseChange": {
           if (data.phase) {
             const newPhase = data.phase as DebatePhase;
-            
+            console.log(
+              `✓✓✓ RECEIVED PHASE CHANGE: ${newPhase} (previous: ${debatePhaseRef.current})`
+            );
+            console.log(`Phase change data:`, data);
+
             // Ensure we accept the phase change
             setDebatePhase(newPhase);
-            
+
             // Close setup popup and clear countdown when debate starts (ALWAYS if not setup)
             if (newPhase !== DebatePhase.Setup) {
               debateStartedRef.current = true; // Mark debate as started - prevent popup from reopening
@@ -696,9 +740,10 @@ const TeamDebateRoom: React.FC = () => {
           } else {
           }
           break;
-        case "speechText":
+        }
+        case "speechText": {
           if (data.userId && data.speechText) {
-            const targetPhase = data.phase || currentPhase;
+            const targetPhase = data.phase || debatePhaseRef.current;
             setSpeechTranscripts((prev) => ({
             ...prev,
               [targetPhase]:
@@ -706,7 +751,8 @@ const TeamDebateRoom: React.FC = () => {
             }));
           }
           break;
-        case "liveTranscript":
+        }
+        case "liveTranscript": {
           if (
             data.userId &&
             data.liveTranscript &&
@@ -715,7 +761,8 @@ const TeamDebateRoom: React.FC = () => {
             setCurrentTranscript(data.liveTranscript);
           }
           break;
-        case "teamStatus":
+        }
+        case "teamStatus": {
           // Update team member status
           if (data.team1Members) {
             if (amTeam1) {
@@ -732,6 +779,7 @@ const TeamDebateRoom: React.FC = () => {
             }
           }
           break;
+        }
         case "offer":
           // Handle WebRTC offer
           break;
