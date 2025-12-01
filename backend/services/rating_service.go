@@ -63,6 +63,31 @@ func UpdateRatings(userID, opponentID primitive.ObjectID, outcome float64, debat
 	sanitizePlayerStats(userPlayer, preUserRating, preUserRD)
 	sanitizePlayerStats(opponentPlayer, preOpponentRating, preOpponentRD)
 
+	// Sanitize rating outputs to avoid NaN/Inf values
+	sanitizePlayerMetrics := func(player *rating.Player) {
+		initialRating := ratingSystem.Config.InitialRating
+		initialRD := ratingSystem.Config.InitialRD
+		initialVol := ratingSystem.Config.InitialVol
+
+		if math.IsNaN(player.Rating) || math.IsInf(player.Rating, 0) {
+			player.Rating = initialRating
+		}
+		if math.IsNaN(player.RD) || math.IsInf(player.RD, 0) {
+			player.RD = initialRD
+		}
+		if math.IsNaN(player.Volatility) || math.IsInf(player.Volatility, 0) {
+			player.Volatility = initialVol
+		}
+		if player.RD <= 0 {
+			player.RD = initialRD
+		}
+		if player.Volatility <= 0 {
+			player.Volatility = initialVol
+		}
+	}
+	sanitizePlayerMetrics(userPlayer)
+	sanitizePlayerMetrics(opponentPlayer)
+
 	// Create debate record
 	debate := &models.Debate{
 		UserID:        userID,
@@ -74,8 +99,8 @@ func UpdateRatings(userID, opponentID primitive.ObjectID, outcome float64, debat
 		PreRD:         preUserRD,
 		PostRating:    userPlayer.Rating,
 		PostRD:        userPlayer.RD,
-		RatingChange:  userPlayer.Rating - preUserRating,
-		RDChange:      userPlayer.RD - preUserRD,
+		RatingChange:  sanitizeFloatMetric(userPlayer.Rating - preUserRating),
+		RDChange:      sanitizeFloatMetric(userPlayer.RD - preUserRD),
 	}
 
 	// Update user in database
@@ -98,11 +123,18 @@ func UpdateRatings(userID, opponentID primitive.ObjectID, outcome float64, debat
 		PreRD:         preOpponentRD,
 		PostRating:    opponentPlayer.Rating,
 		PostRD:        opponentPlayer.RD,
-		RatingChange:  opponentPlayer.Rating - preOpponentRating,
-		RDChange:      opponentPlayer.RD - preOpponentRD,
+		RatingChange:  sanitizeFloatMetric(opponentPlayer.Rating - preOpponentRating),
+		RDChange:      sanitizeFloatMetric(opponentPlayer.RD - preOpponentRD),
 	}
 
 	return debate, opponentDebate, nil
+}
+
+func sanitizeFloatMetric(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0
+	}
+	return value
 }
 
 // Helper function to get user by ID

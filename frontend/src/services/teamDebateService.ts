@@ -1,6 +1,16 @@
 // Team debate service for API calls
 const API_BASE_URL =
-  import.meta.env.VITE_BASE_URL || window.location.origin;
+  (import.meta.env.VITE_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
+  window.location.origin;
+
+interface TeamDebateMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  elo: number;
+}
+>>>>>>> main
 
 function getAuthToken(): string {
   return localStorage.getItem("token") || "";

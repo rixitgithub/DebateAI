@@ -329,9 +329,13 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 	}
 
 	log.Printf("Successfully retrieved user: %s (email: %s)", userID.Hex(), user.Email)
+
 	log.Printf("Current user score: %d, badges: %v", user.Score, user.Badges)
 
+	// Ensure score field exists - if it's 0 or not set, initialize it
+	// Note: MongoDB's $inc will create the field if it doesn't exist, but we'll ensure it's set
 	if user.Score < 0 {
+		// If score is negative (shouldn't happen), reset it to 0
 		user.Score = 0
 	}
 
@@ -355,11 +359,13 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 
 	log.Printf("Adding %d points for result: %s", pointsToAdd, resultStatus)
 
+	// Update user score atomically - $inc will create the field if it doesn't exist
 	update := bson.M{
 		"$inc": bson.M{"score": pointsToAdd},
 		"$set": bson.M{"updatedAt": time.Now()},
 	}
 
+	// Use UpdateOne first to ensure the update happens
 	updateResult, err := userCollection.UpdateOne(ctx, bson.M{"_id": userID}, update)
 	if err != nil {
 		log.Printf("Error updating score with UpdateOne: %v", err)
@@ -371,6 +377,7 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 		return
 	}
 
+	// Now fetch the updated user
 	var updatedUser models.User
 	err = userCollection.FindOne(ctx, bson.M{"_id": userID}).Decode(&updatedUser)
 	if err != nil {
@@ -378,9 +385,10 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 		return
 	}
 
-	log.Printf("Successfully updated score. New score: %d (was %d, added %d)",
+	log.Printf("Successfully updated score. New score: %d (was %d, added %d)", 
 		updatedUser.Score, user.Score, pointsToAdd)
 
+	// Save score update record
 	scoreCollection := db.MongoDatabase.Collection("score_updates")
 	scoreUpdate := models.ScoreUpdate{
 		ID:        primitive.NewObjectID(),
@@ -394,22 +402,28 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 			"result":     resultStatus,
 		},
 	}
-	if _, err := scoreCollection.InsertOne(ctx, scoreUpdate); err != nil {
+	_, err = scoreCollection.InsertOne(ctx, scoreUpdate)
+	if err != nil {
 		log.Printf("Error saving score update record: %v", err)
+		// Don't fail, continue with badge checks
 	}
 
+	// Check for badges (FirstWin, etc.)
 	hasBadge := make(map[string]bool)
 	for _, badge := range updatedUser.Badges {
 		hasBadge[badge] = true
 	}
 
+	// Check for FirstWin badge (first win against bot)
 	if resultStatus == "win" && !hasBadge["FirstWin"] {
 		badgeUpdate := bson.M{"$addToSet": bson.M{"badges": "FirstWin"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, badgeUpdate)
-
+		
+		// Update the updatedUser object to include the new badge
 		updatedUser.Badges = append(updatedUser.Badges, "FirstWin")
 		hasBadge["FirstWin"] = true
-
+		
+		// Save badge record
 		badgeCollection := db.MongoDatabase.Collection("user_badges")
 		userBadge := models.UserBadge{
 			ID:        primitive.NewObjectID(),
@@ -423,6 +437,7 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 		}
 		badgeCollection.InsertOne(ctx, userBadge)
 
+		// Broadcast badge award via WebSocket
 		websocket.BroadcastGamificationEvent(models.GamificationEvent{
 			Type:      "badge_awarded",
 			UserID:    userID.Hex(),
@@ -432,8 +447,10 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 		log.Printf("Awarded FirstWin badge to user %s", userID.Hex())
 	}
 
+	// Check for automatic badges (Novice, Streak5, FactMaster, etc.)
 	checkAndAwardAutomaticBadges(ctx, userID, updatedUser)
 
+	// Broadcast score update via WebSocket
 	websocket.BroadcastGamificationEvent(models.GamificationEvent{
 		Type:      "score_updated",
 		UserID:    userID.Hex(),
@@ -443,7 +460,7 @@ func updateGamificationAfterBotDebate(userID primitive.ObjectID, resultStatus, t
 		Timestamp: time.Now(),
 	})
 
-	log.Printf("Updated gamification for user %s: +%d points (new score: %d), result: %s",
+	log.Printf("Updated gamification for user %s: +%d points (new score: %d), result: %s", 
 		userID.Hex(), pointsToAdd, updatedUser.Score, resultStatus)
 }
 
@@ -455,6 +472,7 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 		hasBadge[badge] = true
 	}
 
+	// Check for Novice badge (first debate completed)
 	if user.Score >= 10 && !hasBadge["Novice"] {
 		update := bson.M{"$addToSet": bson.M{"badges": "Novice"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, update)
@@ -467,6 +485,7 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 		})
 	}
 
+	// Check for Streak5 badge (5 day streak)
 	if user.CurrentStreak >= 5 && !hasBadge["Streak5"] {
 		update := bson.M{"$addToSet": bson.M{"badges": "Streak5"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, update)
@@ -479,6 +498,7 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 		})
 	}
 
+	// Check for FactMaster badge (high score threshold)
 	if user.Score >= 500 && !hasBadge["FactMaster"] {
 		update := bson.M{"$addToSet": bson.M{"badges": "FactMaster"}}
 		userCollection.UpdateOne(ctx, bson.M{"_id": userID}, update)
@@ -490,4 +510,7 @@ func checkAndAwardAutomaticBadges(ctx context.Context, userID primitive.ObjectID
 			Timestamp: time.Now(),
 		})
 	}
+
+	// Check for Debater10 badge (10 debates completed)
+	// Note: This would require tracking debate count, which might need to be added
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	cryptoRand "crypto/rand"
 	"math/big"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -349,6 +348,16 @@ func JoinTeam(c *gin.Context) {
 	err = collection.FindOne(context.Background(), bson.M{"_id": objectID}).Decode(&team)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Team not found"})
+		return
+	}
+
+	capacity := team.MaxSize
+	if capacity <= 0 {
+		capacity = 4
+	}
+
+	if len(team.Members) >= capacity {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Team is already full"})
 		return
 	}
 
