@@ -24,6 +24,9 @@ import TournamentDetails from './Pages/TournamentDetails';
 import ProsConsChallenge from './Pages/ProsConsChallenge';
 import TeamBuilder from './Pages/TeamBuilder';
 import TeamDebateRoom from './Pages/TeamDebateRoom';
+import CommunityFeed from './Pages/CommunityFeed';
+import AdminSignup from './Pages/Admin/AdminSignup';
+import AdminDashboard from './Pages/Admin/AdminDashboard';
 import ViewDebate from './Pages/ViewDebate';
 
 // Protects routes based on authentication status
@@ -56,12 +59,15 @@ function AppRoutes() {
         }
       />
       <Route path='/auth' element={<Authentication />} />
+      <Route path='/admin/login' element={<AdminSignup />} />
+      <Route path='/admin/dashboard' element={<AdminDashboard />} />
       {/* Protected routes with layout */}
       <Route element={<ProtectedRoute />}>
         <Route path='/' element={<Layout />}>
           <Route path='startDebate' element={<StartDebate />} />
           <Route path='leaderboard' element={<Leaderboard />} />
           <Route path='profile' element={<Profile />} />
+          <Route path='community' element={<CommunityFeed />} />
           <Route path='about' element={<About />} />
           <Route path='team-builder' element={<TeamBuilder />} />
           <Route path='game/:userId' element={<DebateApp />} />

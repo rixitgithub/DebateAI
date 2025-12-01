@@ -32,6 +32,17 @@ const Game: React.FC = () => {
   });
 
   const websocketRef = useRef<WebSocket | null>(null);
+  const lastTypingStateRef = useRef<boolean>(false);
+  const lastSpeakingStateRef = useRef<boolean>(false);
+
+  const sendWebSocketMessage = useCallback((payload: Record<string, unknown>) => {
+    const ws = websocketRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    } else {
+      console.warn("Attempted to send message while WebSocket was not open.", payload);
+    }
+  }, []);
 
   type GameWebSocketMessage = {
     type: string;
@@ -39,6 +50,7 @@ const Game: React.FC = () => {
     [key: string]: unknown;
   };
 
+<<<<<<< HEAD
   const parseContent = useCallback(
     <T,>(raw: string, messageType: string): T | null => {
       try {
@@ -46,6 +58,88 @@ const Game: React.FC = () => {
       } catch (error) {
         console.error(`Failed to parse ${messageType} content:`, error);
         return null;
+=======
+  const handleWebSocketMessage = (message: any) => {
+    switch (message.type) {
+      case "DEBATE_START":
+        setState((prevState) => ({ ...prevState, loading: false }));
+        break;
+      case "DEBATE_END":
+        setState((prevState) => ({ ...prevState, gameEnded: true }));
+        break;
+      case "TURN_START": {
+        const { currentTurn, duration } = JSON.parse(message.content);
+        setState((prevState) => ({
+          ...prevState,
+          isTurn: currentTurn === userId,
+          turnDuration: duration,
+        }));
+        break;
+      }
+      case "TURN_END":
+        setState((prevState) => ({
+          ...prevState,
+          isTurn: false,
+          turnDuration: 0,
+        }));
+        break;
+      case "CHAT_MESSAGE": {
+        const { sender, message: chatMessage } = JSON.parse(message.content);
+        const newMessage: ChatMessage = {
+          isUser: sender === userId,
+          text: chatMessage,
+        };
+        setState((prevState) => ({
+          ...prevState,
+          messages: [...prevState.messages, newMessage],
+          transcriptStatus: { ...prevState.transcriptStatus, loading: false },
+          typingIndicators: prevState.typingIndicators.filter(
+            (indicator) => indicator.userId !== sender
+          ),
+        }));
+        break;
+      }
+      case "TYPING_STATUS": {
+        const data = JSON.parse(message.content);
+        const senderId: string | undefined = data.userId ?? data.sender;
+        if (!senderId || senderId === userId) {
+          break;
+        }
+        setState((prevState) => ({
+          ...prevState,
+          typingIndicators: upsertIndicator(prevState.typingIndicators, {
+            userId: senderId,
+            username: data.username,
+            isTyping: data.isTyping,
+            partialText: data.partialText,
+          }),
+        }));
+        break;
+      }
+      case "SPEAKING_STATUS": {
+        const data = JSON.parse(message.content);
+        const senderId: string | undefined = data.userId ?? data.sender;
+        if (!senderId || senderId === userId) {
+          break;
+        }
+        setState((prevState) => ({
+          ...prevState,
+          typingIndicators: upsertIndicator(prevState.typingIndicators, {
+            userId: senderId,
+            username: data.username,
+            isSpeaking: data.isSpeaking,
+          }),
+        }));
+        break;
+      }
+      case "GENERATING_TRANSCRIPT": {
+        const { sender } = JSON.parse(message.content);
+        setState((prevState) => ({
+          ...prevState,
+          transcriptStatus: { loading: true, isUser: sender === userId }, //transcript is getting generated
+        }));
+        break;
+>>>>>>> main
       }
     },
     []
@@ -280,7 +374,85 @@ const Game: React.FC = () => {
     ws.onclose = () => console.log("WebSocket connection closed");
 
     return () => ws.close();
+<<<<<<< HEAD
   }, [userId, handleWebSocketMessage]);
+=======
+  }, [userId]);
+
+  const handleSendChatMessage = useCallback(
+    (messageText: string, mode: "type" | "speak") => {
+      const trimmed = messageText.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      sendWebSocketMessage({
+        type: "CHAT_MESSAGE",
+        content: JSON.stringify({
+          sender: userId,
+          message: trimmed,
+          mode,
+          timestamp: Date.now(),
+        }),
+      });
+    },
+    [sendWebSocketMessage, userId]
+  );
+
+  const handleTypingChange = useCallback(
+    (isTyping: boolean, partialText?: string) => {
+      if (lastTypingStateRef.current === isTyping && !partialText) {
+        return;
+      }
+
+      lastTypingStateRef.current = isTyping;
+      sendWebSocketMessage({
+        type: "TYPING_STATUS",
+        content: JSON.stringify({
+          userId,
+          isTyping,
+          partialText,
+        }),
+      });
+      setState((prevState) => ({
+        ...prevState,
+        typingIndicators: upsertIndicator(prevState.typingIndicators, {
+          userId: userId ?? "local",
+          username: "You",
+          isTyping,
+          partialText,
+        }),
+      }));
+    },
+    [sendWebSocketMessage, userId]
+  );
+
+  const handleSpeakingChange = useCallback(
+    (isSpeaking: boolean) => {
+      if (lastSpeakingStateRef.current === isSpeaking) {
+        return;
+      }
+
+      lastSpeakingStateRef.current = isSpeaking;
+      sendWebSocketMessage({
+        type: "SPEAKING_STATUS",
+        content: JSON.stringify({
+          userId,
+          isSpeaking,
+        }),
+      });
+      setState((prevState) => ({
+        ...prevState,
+        typingIndicators: upsertIndicator(prevState.typingIndicators, {
+          userId: userId ?? "local",
+          username: "You",
+          isSpeaking,
+        }),
+      }));
+    },
+    [sendWebSocketMessage, userId]
+  );
+>>>>>>> main
 
   const renderGameContent = () => (
     <div className="w-screen h-screen flex justify-center items-center">
@@ -417,7 +589,11 @@ const Game: React.FC = () => {
           }}
           typingIndicators={state.typingIndicators}
           isMyTurn={state.isTurn}
+<<<<<<< HEAD
           disabled={!(state.isTurn && !state.gameEnded)}
+=======
+          disabled={state.gameEnded || state.loading}
+>>>>>>> main
         />
       </div>
     </div>

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -19,11 +20,22 @@ var geminiClient *genai.Client
 
 // InitDebateVsBotService initializes the Gemini client using the API key from the config
 func InitDebateVsBotService(cfg *config.Config) {
+	if cfg.Gemini.ApiKey == "" || cfg.Gemini.ApiKey == "<YOUR_GEMINI_API_KEY>" {
+		log.Printf("⚠️  Warning: Gemini API key not configured")
+		log.Printf("⚠️  Server will continue but debate bot and AI features will not work")
+		log.Printf("⚠️  To enable these features, set a valid Gemini API key in config")
+		return
+	}
+
 	var err error
 	geminiClient, err = initGemini(cfg.Gemini.ApiKey)
 	if err != nil {
-		panic("Failed to initialize Gemini client: " + err.Error())
+		log.Printf("⚠️  Warning: Failed to initialize Gemini client: %v", err)
+		log.Printf("⚠️  Server will continue but debate bot and AI features will not work")
+		log.Printf("⚠️  To enable these features, check your Gemini API key configuration")
+		return
 	}
+	log.Println("✅ Gemini client initialized successfully")
 }
 
 // FormatHistory converts a slice of debate messages into a formatted transcript
@@ -444,6 +456,7 @@ Provide ONLY the JSON output without any additional text.`,
 	text, err := generateDefaultModelText(ctx, prompt)
 	if err != nil || text == "" {
 		if err != nil {
+			log.Printf("Gemini error: %v", err)
 		}
 		return "Unable to judge."
 	}
