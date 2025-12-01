@@ -2,7 +2,8 @@
 import { Team } from "./teamService";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL?.replace(/\/+$/, "") ?? "http://localhost:1313";
+  (import.meta.env.VITE_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
+  window.location.origin;
 
 function getAuthToken(): string {
   return localStorage.getItem("token") || "";
