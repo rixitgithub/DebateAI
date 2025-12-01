@@ -104,6 +104,12 @@ interface WSMessage {
   team2Ready?: number;
   team1MembersCount?: number;
   team2MembersCount?: number;
+  spectatorCount?: number;
+  spectator?: {
+    connectionId: string;
+    spectatorUserId?: string;
+    spectatorDisplayName?: string;
+  };
 }
 
 // Define phase durations in seconds
@@ -138,18 +144,6 @@ const TeamDebateRoom: React.FC = () => {
   // Use user from hook if available, otherwise fallback to atom
   const currentUser = userFromHook || user;
   
-  // Debug: Log user state
-  useEffect(() => {
-    console.debug('TeamDebateRoom user state', {
-      userFromAtom: user?.id,
-      userFromHook: userFromHook?.id,
-      currentUser: currentUser?.id,
-      isUserLoading,
-      isAuthenticated,
-      hasToken: !!getAuthToken(),
-    });
-  }, [user?.id, userFromHook?.id, currentUser?.id, isUserLoading, isAuthenticated]);
-
   // Debate state
   const [debate, setDebate] = useState<any>(null);
   const [topic, setTopic] = useState("");
@@ -190,7 +184,6 @@ const TeamDebateRoom: React.FC = () => {
   }, [debatePhase]);
 
   // State for media streams
-  const [, setLocalStream] = useState<MediaStream | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(true);
 
@@ -284,14 +277,6 @@ const TeamDebateRoom: React.FC = () => {
       // Allow proceeding if we have a token, even if user isn't fully loaded yet
       // The debate API will use the token for authentication
       if (!debateId || (!token && !currentUser?.id)) {
-        console.debug('Skipping team debate fetch', {
-          debateId,
-          userId: currentUser?.id,
-          hasToken: !!token,
-          isUserLoading,
-          userFromAtom: user?.id,
-          userFromHook: userFromHook?.id,
-        });
         return;
       }
 
@@ -309,16 +294,6 @@ const TeamDebateRoom: React.FC = () => {
         const userTeam2 = debateData.team2Members?.some(
           (member: TeamMember) => member.userId === userId
         );
-
-        console.debug('Resolved team membership info', {
-          userId,
-          currentUser: currentUser?.id,
-          userFromAtom: user?.id,
-          userTeam1,
-          userTeam2,
-          team1Members: debateData.team1Members?.map((m: TeamMember) => m.userId),
-          team2Members: debateData.team2Members?.map((m: TeamMember) => m.userId),
-        });
 
         if (userTeam1) {
           setIsTeam1(true);
@@ -342,7 +317,6 @@ const TeamDebateRoom: React.FC = () => {
           const team2Stance = debateData.team2Stance === "for" ? "for" : "against";
           setLocalRole(team2Stance);
           setPeerRole(team1Stance);
-        } else {
         }
 
         setIsLoading(false);
@@ -391,8 +365,44 @@ const TeamDebateRoom: React.FC = () => {
     };
   }, [timer, debatePhase, isMyTurn, speechTranscripts, localRole, debateId]);
 
+  useEffect(() => {
+    isTeam1Ref.current = isTeam1;
+  }, [isTeam1]);
+
+  useEffect(() => {
+    myTeamIdRef.current = myTeamId;
+  }, [myTeamId]);
+
+  useEffect(() => {
+    debatePhaseRef.current = debatePhase;
+  }, [debatePhase]);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUser?.id;
+  }, [currentUser?.id]);
+
   // Initialize WebSocket connection - only need token and debateId
   // User ID will be extracted from token on backend
+  const getMedia = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720 },
+        audio: true,
+      });
+      localStreamRef.current = stream;
+
+      const currentUserId = currentUserIdRef.current || "";
+      const localVideo = localVideoRefs.current.get(currentUserId);
+      if (localVideo) {
+        localVideo.srcObject = stream;
+      }
+    } catch (err) {
+      setMediaError(
+        "Failed to access camera/microphone. Please check permissions."
+      );
+    }
+  }, [setMediaError]);
+
   useEffect(() => {
     const token = getAuthToken();
     if (!token || !debateId) {
@@ -778,30 +788,6 @@ const TeamDebateRoom: React.FC = () => {
       }
     };
 
-
-    const getMedia = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
-          audio: true,
-        });
-        setLocalStream(stream);
-        localStreamRef.current = stream;
-        
-        // Attach local stream to video element
-        const localVideo = localVideoRefs.current.get(
-          currentUserIdRef.current || ""
-        );
-        if (localVideo) {
-          localVideo.srcObject = stream;
-        }
-      } catch (err) {
-        setMediaError(
-          "Failed to access camera/microphone. Please check permissions."
-        );
-      }
-    };
-
     return () => {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -811,7 +797,7 @@ const TeamDebateRoom: React.FC = () => {
       }
       pcRefs.current.forEach((pc) => pc.close());
     };
-  }, [debateId, currentUser?.id]);
+  }, [debateId, getMedia, currentUser?.id]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -858,7 +844,6 @@ const TeamDebateRoom: React.FC = () => {
                 (prev[debatePhase] || "") + " " + finalTranscript
               ).trim(),
             }));
-            setCurrentTranscript("");
 
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               wsRef.current.send(
@@ -873,8 +858,6 @@ const TeamDebateRoom: React.FC = () => {
             }
           }
           if (interimTranscript) {
-            setCurrentTranscript(interimTranscript);
-
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               wsRef.current.send(
                 JSON.stringify({
@@ -1103,6 +1086,16 @@ const TeamDebateRoom: React.FC = () => {
       );
     } else {
     }
+  };
+
+  const toggleCamera = () => {
+    const stream = localStreamRef.current;
+    const videoTrack = stream?.getVideoTracks()[0];
+    const nextState = !isCameraOn;
+    if (videoTrack) {
+      videoTrack.enabled = nextState;
+    }
+    setIsCameraOn(nextState);
   };
 
   // Manage setup popup visibility and check if debate should start
@@ -1701,6 +1694,11 @@ const TeamDebateRoom: React.FC = () => {
           {mediaError}
         </p>
       )}
+  {speechError && (
+    <p className="text-amber-600 mt-2 text-center max-w-6xl mx-auto">
+      {speechError}
+    </p>
+  )}
 
       <style>{`
         @keyframes glow {

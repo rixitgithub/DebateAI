@@ -1,16 +1,9 @@
 // Team debate service for API calls
+import { Team } from "./teamService";
+
 const API_BASE_URL =
   (import.meta.env.VITE_BASE_URL as string | undefined)?.replace(/\/$/, "") ??
   window.location.origin;
-
-interface TeamDebateMember {
-  userId: string;
-  email: string;
-  displayName: string;
-  avatarUrl?: string;
-  elo: number;
-}
->>>>>>> main
 
 function getAuthToken(): string {
   return localStorage.getItem("token") || "";
@@ -45,6 +38,27 @@ export interface TeamDebate {
   team2Elo: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TeamMatchmakingPoolEntry {
+  teamId: string;
+  teamName: string;
+  captainId: string;
+  maxSize: number;
+  averageElo: number;
+  membersCount: number;
+  timestamp: string;
+}
+
+export interface TeamMatchmakingPoolResponse {
+  poolSize: number;
+  teams: TeamMatchmakingPoolEntry[];
+}
+
+export interface MatchmakingStatusResponse {
+  matched: boolean;
+  team?: Team;
+  matchId?: string;
 }
 
 // Create a team debate
@@ -134,22 +148,7 @@ export const leaveMatchmaking = async (teamId: string): Promise<void> => {
   }
 };
 
-export interface MatchmakingPoolTeam {
-  teamId: string;
-  teamName: string;
-  captainId: string;
-  maxSize: number;
-  averageElo: number;
-  membersCount: number;
-  timestamp: string;
-}
-
-export interface MatchmakingPoolResponse {
-  poolSize: number;
-  teams: MatchmakingPoolTeam[];
-}
-
-export const getMatchmakingPool = async (): Promise<MatchmakingPoolResponse> => {
+export const getMatchmakingPool = async (): Promise<TeamMatchmakingPoolResponse> => {
   const token = getAuthToken();
   const response = await fetch(`${API_BASE_URL}/matchmaking/pool`, {
     headers: {
@@ -164,22 +163,6 @@ export const getMatchmakingPool = async (): Promise<MatchmakingPoolResponse> => 
   const data: MatchmakingPoolResponse = await response.json();
   return data;
 };
-
-export interface MatchmakingStatusResponse {
-  matched: boolean;
-  team?: {
-    id: string;
-    name: string;
-    captainId: string;
-    captainEmail: string;
-    members: TeamDebateMember[];
-    maxSize: number;
-    averageElo: number;
-    createdAt: string;
-    updatedAt: string;
-  };
-  matchId?: string;
-}
 
 export const getMatchmakingStatus = async (
   teamId: string
