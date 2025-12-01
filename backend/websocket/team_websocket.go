@@ -3,7 +3,9 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,11 +13,11 @@ import (
 	"arguehub/models"
 	"arguehub/services"
 	"arguehub/utils"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"strings"
 )
 
 // TeamRoom represents a team debate room with connected team members
@@ -392,13 +394,24 @@ func snapshotTeamRecipients(room *TeamRoom, exclude *websocket.Conn) []*TeamClie
 	return out
 }
 
+// snapshotAllTeamClients returns a slice of all team clients in the room.
+func snapshotAllTeamClients(room *TeamRoom) []*TeamClient {
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+	out := make([]*TeamClient, 0, len(room.Clients))
+	for _, cl := range room.Clients {
+		out = append(out, cl)
+	}
+	return out
+}
+
 // handleTeamJoin handles team join messages
 func handleTeamJoin(room *TeamRoom, conn *websocket.Conn, message TeamMessage, client *TeamClient, roomKey string) {
 	// Send team status to all clients
 	teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
 
 	// Broadcast to all clients in the room
-	for _, r := range room.Clients {
+	for _, r := range snapshotAllTeamClients(room) {
 		response := map[string]interface{}{
 			"type":        "teamStatus",
 			"teamStatus":  teamStatus,
@@ -529,16 +542,18 @@ func handleTeamPhaseChange(room *TeamRoom, conn *websocket.Conn, message TeamMes
 		room.CurrentPhase = message.Phase
 	} else {
 	}
+	currentPhase := room.CurrentPhase
 	room.Mutex.Unlock()
 
 	// Broadcast phase change to ALL clients (including sender for sync)
 	phaseMessage := TeamMessage{
 		Type:  "phaseChange",
-		Phase: room.CurrentPhase,
+		Phase: currentPhase,
 	}
-	for _, r := range room.Clients {
+	for _, r := range snapshotAllTeamClients(room) {
 		if err := r.SafeWriteJSON(phaseMessage); err != nil {
 		} else {
+			log.Printf("[handleTeamPhaseChange] ✓ Phase change broadcasted: %s", currentPhase)
 		}
 	}
 }
@@ -553,7 +568,7 @@ func handleTeamTopicChange(room *TeamRoom, conn *websocket.Conn, message TeamMes
 	room.Mutex.Unlock()
 
 	// Broadcast topic change to ALL clients (including sender for sync)
-	for _, r := range room.Clients {
+	for _, r := range snapshotAllTeamClients(room) {
 		if err := r.SafeWriteJSON(message); err != nil {
 		}
 	}
@@ -588,7 +603,7 @@ func handleTeamRoleSelection(room *TeamRoom, conn *websocket.Conn, message TeamM
 		}
 		room.Mutex.Unlock()
 
-		for _, r := range room.Clients {
+		for _, r := range snapshotAllTeamClients(room) {
 			if err := r.SafeWriteJSON(roleMessage); err != nil {
 			}
 		}
@@ -774,12 +789,13 @@ func handleTeamTurnRequest(room *TeamRoom, conn *websocket.Conn, message TeamMes
 
 		// Broadcast turn status to all clients
 		teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
-		for _, r := range room.Clients {
+		currentTurn := room.TurnManager.GetCurrentTurn(client.TeamID).Hex()
+		for _, r := range snapshotAllTeamClients(room) {
 			if r.TeamID == client.TeamID {
 				response := map[string]interface{}{
 					"type":        "teamStatus",
 					"teamStatus":  teamStatus,
-					"currentTurn": room.TurnManager.GetCurrentTurn(client.TeamID).Hex(),
+					"currentTurn": currentTurn,
 				}
 				if err := r.SafeWriteJSON(response); err != nil {
 				}
@@ -806,7 +822,7 @@ func handleTeamTurnEnd(room *TeamRoom, conn *websocket.Conn, message TeamMessage
 	teamStatus := room.TokenBucket.GetTeamSpeakingStatus(client.TeamID, room.TurnManager)
 
 	// Broadcast turn change to all clients in the team
-	for _, r := range room.Clients {
+	for _, r := range snapshotAllTeamClients(room) {
 		if r.TeamID == client.TeamID {
 			response := map[string]interface{}{
 				"type":        "teamStatus",
